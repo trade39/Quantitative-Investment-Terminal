@@ -292,7 +292,7 @@ with macro_tab2:
                 elif 'Bearish' in val: color = '#8080FF'
                 return f'color: {color}'
             if not df_cal.empty: 
-                st.dataframe(df_cal.style.applymap(color_bias, subset=['BIAS']), use_container_width=True, hide_index=True)
+                st.dataframe(df_cal.style.map(color_bias, subset=['BIAS']), use_container_width=True, hide_index=True)
         else: st.info("No high impact events.")
 
     with col_news:
