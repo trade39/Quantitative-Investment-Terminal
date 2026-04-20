@@ -9,6 +9,7 @@ from utils import get_api_key, terminal_chart_layout
 import data_engine as de
 import quant_engine as qe
 import ai_engine as ai
+from utils import generate_pdf_report
 
 # --- APP CONFIGURATION ---
 st.set_page_config(layout="wide", page_title="Bloomberg Terminal Pro V5.21", page_icon="⚡")
@@ -62,6 +63,18 @@ with st.sidebar:
     cg_key = get_api_key("coingecko_key") 
     fred_key = get_api_key("fred_api_key")
     
+    st.markdown("---")
+    with st.expander("🌍 MARKET PULSE", expanded=True):
+        watchlist_tickers = [v['ticker'] for v in config.ASSETS.values()]
+        watchlist_df = de.get_watchlist_data(watchlist_tickers)
+        if not watchlist_df.empty:
+            for _, row in watchlist_df.iterrows():
+                col_t, col_p = st.columns([2, 1])
+                color = "#00FFFF" if row['change'] >= 0 else "#8080FF"
+                col_t.markdown(f"<span style='font-size:0.8em;'>{row['ticker']}</span>", unsafe_allow_html=True)
+                col_p.markdown(f"<span style='color:{color}; font-family:monospace; font-size:0.8em;'>{row['change']:+.2f}%</span>", unsafe_allow_html=True)
+        else: st.info("Pulse unavailable.")
+
     if st.button(">> REFRESH DATA"): 
         st.cache_data.clear()
         st.rerun()
@@ -107,7 +120,11 @@ vwap_df = qe.calculate_vwap_bands(intraday_data)
 pred_dates, pred_paths = qe.generate_monte_carlo(daily_data)
 seasonality_stats = qe.get_seasonality_stats(daily_data, asset_info['ticker']) 
 
-# Initialize COT Data for AI (Fetched later in the specific section but defined here)
+# advanced logic
+smc_data = qe.detect_smc_patterns(daily_data)
+val, vah = qe.calculate_value_area(vol_profile)
+
+# Initialize COT Data for AI
 cot_data = None 
 macro_context_data = {}
 
@@ -353,7 +370,17 @@ with strat_col1:
         fig.add_trace(go.Scatter(x=ms_df[sh_mask].index, y=ms_df[sh_mask]['High'], mode='markers', marker=dict(symbol='triangle-down', size=8, color='#8080FF'), name='Swing High'))
         fig.add_trace(go.Scatter(x=ms_df[sl_mask].index, y=ms_df[sl_mask]['Low'], mode='markers', marker=dict(symbol='triangle-up', size=8, color='#00FFFF'), name='Swing Low'))
 
-        if poc_price: fig.add_hline(y=poc_price, line_dash="dash", line_color="#CCCCCC", annotation_text="POC")
+        # SMC OVERLAYS: Order Blocks
+        if smc_data:
+            for ob in smc_data['obs']:
+                ob_color = "rgba(0, 255, 255, 0.2)" if "Bullish" in ob['type'] else "rgba(128, 128, 255, 0.2)"
+                fig.add_shape(type="rect", x0=ob['date'], x1=daily_data.index[-1], y0=ob['bottom'], y1=ob['top'], fillcolor=ob_color, line_width=0, layer="below")
+
+        # VOLUME PROFILE OVERLAYS
+        if poc_price: 
+            fig.add_hline(y=poc_price, line_dash="dash", line_color="#FFFFFF", annotation_text="POC", annotation_position="bottom right")
+        if val and vah:
+            fig.add_hrect(y0=val, y1=vah, fillcolor="rgba(255, 255, 255, 0.05)", line_width=0, layer="below")
 
         # Trace 4: DXY Overlay
         if not dxy_data.empty:
@@ -684,6 +711,24 @@ if gemini_key:
                 )
                 st.session_state['thesis_cache'] = thesis_text
                 st.rerun()
+
+        # PDF EXPORT
+        st.markdown("---")
+        if st.session_state['narrative_cache'] or st.session_state['thesis_cache']:
+            pdf_data = {
+                "ticker": selected_asset, "price": curr, "pct": pct,
+                "ml_signal": ml_bias, "regime": regime_data['regime'] if regime_data else "N/A",
+                "narrative": st.session_state['narrative_cache'],
+                "thesis": st.session_state['thesis_cache'],
+                "levels": key_levels
+            }
+            pdf_bytes = generate_pdf_report(pdf_data)
+            st.download_button(
+                label="📥 DOWNLOAD INSTITUTIONAL BRIEF",
+                data=pdf_bytes,
+                file_name=f"Terminal_Brief_{selected_asset}_{pd.Timestamp.now().strftime('%Y%m%d')}.pdf",
+                mime="application/pdf"
+            )
 
     with c_ai2:
         if st.session_state['narrative_cache']:
