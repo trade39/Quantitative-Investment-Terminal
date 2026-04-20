@@ -119,6 +119,83 @@ def detect_fair_value_gaps(df):
     # returning last 3 significant ones for display
     return fvgs[-3:] if fvgs else []
 
+def detect_smc_patterns(df, window=5):
+    """
+    Detects SMC (Smart Money Concepts) patterns:
+    - Order Blocks (OB): High-probability reversal zones.
+    - Liquidity Sweeps: Stop hunts at key highs/lows.
+    """
+    if len(df) < 20: return {"obs": [], "sweeps": []}
+    
+    obs = []
+    # Simplified OB Detection: Last counter-trend candle before a change in structure
+    for i in range(5, len(df) - 5):
+        # Bullish OB: Bearish candle before a strong impulsive up move
+        if df['Close'].iloc[i] < df['Open'].iloc[i]:
+            if df['Close'].iloc[i+1] > df['High'].iloc[i] and df['Close'].iloc[i+3] > df['High'].iloc[i+1]:
+                obs.append({
+                    "type": "Bullish OB",
+                    "top": df['High'].iloc[i],
+                    "bottom": df['Low'].iloc[i],
+                    "date": df.index[i]
+                })
+        # Bearish OB: Bullish candle before a strong impulsive down move
+        elif df['Close'].iloc[i] > df['Open'].iloc[i]:
+            if df['Close'].iloc[i+1] < df['Low'].iloc[i] and df['Close'].iloc[i+3] < df['Low'].iloc[i+1]:
+                obs.append({
+                    "type": "Bearish OB",
+                    "top": df['High'].iloc[i],
+                    "bottom": df['Low'].iloc[i],
+                    "date": df.index[i]
+                })
+
+    sweeps = []
+    # Simplified Sweep Detection: Price wick goes beyond recent SH/SL but body stays within
+    for i in range(10, len(df)):
+        lookback = df.iloc[i-10:i]
+        prev_high = lookback['High'].max()
+        prev_low = lookback['Low'].min()
+        
+        # High Sweep
+        if df['High'].iloc[i] > prev_high and df['Close'].iloc[i] < prev_high:
+            sweeps.append({"type": "High Sweep", "price": df['High'].iloc[i], "date": df.index[i]})
+        # Low Sweep
+        if df['Low'].iloc[i] < prev_low and df['Close'].iloc[i] > prev_low:
+            sweeps.append({"type": "Low Sweep", "price": df['Low'].iloc[i], "date": df.index[i]})
+
+    return {"obs": obs[-5:], "sweeps": sweeps[-3:]}
+
+def calculate_value_area(vol_profile, pct=0.7):
+    """Calculates the Value Area High (VAH) and Low (VAL) for a volume profile."""
+    if vol_profile is None or vol_profile.empty: return None, None
+    
+    total_vol = vol_profile['Volume'].sum()
+    target_vol = total_vol * pct
+    
+    poc_idx = vol_profile['Volume'].idxmax()
+    poc_vol = vol_profile.loc[poc_idx, 'Volume']
+    
+    current_vol = poc_vol
+    low_idx = poc_idx
+    high_idx = poc_idx
+    
+    while current_vol < target_vol:
+        prev_low_vol = vol_profile.loc[low_idx-1, 'Volume'] if low_idx > 0 else 0
+        next_high_vol = vol_profile.loc[high_idx+1, 'Volume'] if high_idx < len(vol_profile)-1 else 0
+        
+        if prev_low_vol > next_high_vol:
+            current_vol += prev_low_vol
+            low_idx -= 1
+        else:
+            current_vol += next_high_vol
+            high_idx += 1
+            
+        if low_idx == 0 and high_idx == len(vol_profile)-1: break
+            
+    val = vol_profile.loc[low_idx, 'PriceLevel']
+    vah = vol_profile.loc[high_idx, 'PriceLevel']
+    return val, vah
+
 # --- 3. ORDER FLOW & STATS ---
 def calculate_order_flow_proxy(df):
     """
