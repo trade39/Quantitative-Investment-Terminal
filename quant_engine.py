@@ -580,3 +580,53 @@ def get_yield_curve_regime(spread_10y2y, spread_10y3m):
         return "STEEPENING (Growth/Inflation)", "bullish"
     
     return "Neutral", "neutral"
+
+def get_regime_impact(regime_name, ticker):
+    """
+    Returns an institutional explanation of how the current curve regime 
+    typically impacts a specific asset class.
+    """
+    asset_class = "Generic"
+    if "GSPC" in ticker or "IXIC" in ticker: asset_class = "Equity"
+    elif "-USD" in ticker: asset_class = "Crypto"
+    elif "GC=F" in ticker: asset_class = "Gold"
+    elif "EURUSD" in ticker: asset_class = "Forex"
+
+    impacts = {
+        "INVERTED": {
+            "Equity": "High recession risk signals margin compression. Institutional capital typically rotates out of Growth and into Defensive sectors.",
+            "Crypto": "Risk-off regime. Tightening liquidity and rising recession fears are historically negative for speculative 'digital gold' assets.",
+            "Gold": "Bullish. Yield curve inversion often precedes falling real rates and economic uncertainty, driving flight-to-safety demand.",
+            "Forex": "Supportive for USD due to volatility and safe-haven flows, but can indicate late-cycle peak for the Greenback.",
+            "Generic": "Recessionary signal. Liquidity is constrained, favoring defensive positioning and high cash levels."
+        },
+        "FLATTENING": {
+            "Equity": "Transitionary. Late-cycle dynamic. Market starts pricing in peak earnings and slower future growth. Range-bound behavior common.",
+            "Crypto": "Neutral to Bearish. Speculative momentum typically stalls as the 'easy money' phase of the cycle concludes.",
+            "Gold": "Neutral. Market waits for clear directional signals from real rates and inflation expectations.",
+            "Forex": "USD strength often peaks here as other central banks begin catching up to higher rates.",
+            "Generic": "Yield curve flattening suggests a slowing economy. Growth expectations are lowering relative to current rates."
+        },
+        "NORMAL": {
+            "Equity": "Healthy expansion. Broad-based growth is supported by stable interest rate expectations and credit availability.",
+            "Crypto": "Bullish. Stable growth and moderate inflation provide the ideal environment for risk-on adoption and upward price action.",
+            "Gold": "Stable to Bearish. Opportunity cost of holding non-yielding assets increases as the economy grows without excessive inflation.",
+            "Forex": "Reflects standard economic growth metrics. Capital follows growth differentials and productivity.",
+            "Generic": "The benchmark state. Economy is in a sustainable growth phase with low systemic risk."
+        },
+        "STEEPENING": {
+            "Equity": "Bullish if growth-driven; Negative if inflation-driven. Watch if higher long-term rates start hurting valuations.",
+            "Crypto": "Positive. Steepening curves often correlate with reflation trades. High correlation with rising liquidity and inflation sentiment.",
+            "Gold": "Strongly Bullish. In a Bear Steepener (inflation-led), Gold acts as the primary hedge against currency debasement.",
+            "Forex": "Volatile. Reflects deep shifts in future rate expectations. Typically leads to significant trend reversals.",
+            "Generic": "Macro re-acceleration. Reflects expectations of future growth or rising inflation/risk premiums."
+        }
+    }
+    
+    # Normalize regime name key
+    regime_key = "NORMAL"
+    if "INVERTED" in regime_name.upper(): regime_key = "INVERTED"
+    elif "FLATTENING" in regime_name.upper(): regime_key = "FLATTENING"
+    elif "STEEPENING" in regime_name.upper(): regime_key = "STEEPENING"
+    
+    return impacts.get(regime_key, {}).get(asset_class, impacts.get(regime_key, {}).get("Generic", "No specific context available."))
