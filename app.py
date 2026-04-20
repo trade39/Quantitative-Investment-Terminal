@@ -126,6 +126,7 @@ seasonality_stats = qe.get_seasonality_stats(daily_data, asset_info['ticker'])
 # Recession & Correlation
 recession_prob = qe.calculate_recession_probability(df_yield_3m['value'].iloc[-1]) if not df_yield_3m.empty else 0
 yc_regime, yc_color = qe.get_yield_curve_regime(df_yield['value'].iloc[-1] if not df_yield.empty else None, df_yield_3m['value'].iloc[-1] if not df_yield_3m.empty else None)
+yc_impact = qe.get_regime_impact(yc_regime, asset_info['ticker'])
 
 corr_tickers = list(set([asset_info['ticker'], "GC=F", "^GSPC", "EURUSD=X", "BTC-USD", "^TNX"]))
 corr_returns = de.get_correlation_data(corr_tickers)
@@ -215,6 +216,12 @@ with macro_tab3:
             <div class='terminal-box' style='text-align:center; margin-top:10px;'>
                  <div style='color:#AAAAAA; font-size:0.8em;'>CURVE REGIME</div>
                  <div class='{yc_color}' style='font-size:1.1em;'>{yc_regime}</div>
+            </div>
+            """, unsafe_allow_html=True)
+            st.markdown(f"""
+            <div class='terminal-box' style='border-left: 3px solid #00FFFF;'>
+                <div style='font-size:0.75em; color:#AAAAAA; margin-bottom:5px;'>💡 STRATEGIC IMPACT: {selected_asset.upper()}</div>
+                <div style='font-size:0.85em; line-height:1.4;'>{yc_impact}</div>
             </div>
             """, unsafe_allow_html=True)
         with r2:
