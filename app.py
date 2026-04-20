@@ -23,6 +23,8 @@ if 'coingecko_calls' not in st.session_state: st.session_state['coingecko_calls'
 if 'fred_calls' not in st.session_state: st.session_state['fred_calls'] = 0
 if 'narrative_cache' not in st.session_state: st.session_state['narrative_cache'] = None
 if 'thesis_cache' not in st.session_state: st.session_state['thesis_cache'] = None
+if 'last_ai_call_time' not in st.session_state: st.session_state['last_ai_call_time'] = 0
+if 'gemini_model_name' not in st.session_state: st.session_state['gemini_model_name'] = None
 
 # --- SIDEBAR ---
 with st.sidebar:
@@ -38,8 +40,8 @@ with st.sidebar:
         st.markdown("<div style='font-size:0.7em; color:#AAAAAA;'>Session Usage vs Hard Limits</div>", unsafe_allow_html=True)
         st.write(f"**NewsAPI** ({st.session_state['news_calls']} / 100)")
         st.progress(min(st.session_state['news_calls'] / 100, 1.0))
-        st.write(f"**Gemini AI** ({st.session_state['gemini_calls']} / 20)")
-        st.progress(min(st.session_state['gemini_calls'] / 20, 1.0))
+        st.write(f"**Gemini AI (Free)** ({st.session_state['gemini_calls']} / 5 RPM)")
+        st.progress(min(st.session_state['gemini_calls'] / 20, 1.0)) # Keeping visual progress for session, but note the 5 RPM limit
         st.write(f"**RapidAPI** ({st.session_state['rapid_calls']} / 10)")
         st.progress(min(st.session_state['rapid_calls'] / 10, 1.0))
         st.write(f"**FRED** ({st.session_state['fred_calls']} calls)")
@@ -692,25 +694,39 @@ news_text_summary = "\n".join([f"- {n['title']} ({n['source']})" for n in combin
 if gemini_key:
     c_ai1, c_ai2 = st.columns([1, 4])
     with c_ai1:
-        if st.button("📝 GENERATE EXECUTIVE BRIEF"):
-            with st.spinner("Synthesizing..."):
-                narrative = ai.get_technical_narrative(
-                    ticker=selected_asset, price=curr, daily_pct=pct, regime=regime_data,
-                    ml_signal=ml_signal_str, gex_data=gex_summary, cot_data=cot_data,
-                    levels=key_levels, macro_data=macro_context_data, api_key=gemini_key
-                )
-                st.session_state['narrative_cache'] = narrative
-                st.rerun()
+        import time
+        current_time = time.time()
+        cooldown = 20 # 20 second cooldown between AI calls to stay under 5 RPM
+        time_since_last = current_time - st.session_state['last_ai_call_time']
+        can_call = time_since_last > cooldown
+        
+        if st.button("📝 GENERATE EXECUTIVE BRIEF", disabled=not can_call):
+            if can_call:
+                with st.spinner("Synthesizing..."):
+                    st.session_state['last_ai_call_time'] = current_time
+                    narrative = ai.get_technical_narrative(
+                        ticker=selected_asset, price=curr, daily_pct=pct, regime=regime_data,
+                        ml_signal=ml_signal_str, gex_data=gex_summary, cot_data=cot_data,
+                        levels=key_levels, macro_data=macro_context_data, api_key=gemini_key
+                    )
+                    st.session_state['narrative_cache'] = narrative
+                    st.rerun()
+            else:
+                st.warning(f"Wait {int(cooldown - time_since_last)}s (Free Tier Throttling)")
                 
-        if st.button("🔎 GENERATE DEEP THESIS"):
-             with st.spinner("Writing Thesis..."):
-                thesis_text = ai.generate_deep_dive_thesis(
-                    ticker=selected_asset, price=curr, change=pct, regime=regime_data,
-                    ml_signal=ml_signal_str, gex_data=gex_summary, cot_data=cot_data,
-                    levels=key_levels, news_summary=news_text_summary, macro_data=macro_context_data, api_key=gemini_key
-                )
-                st.session_state['thesis_cache'] = thesis_text
-                st.rerun()
+        if st.button("🔎 GENERATE DEEP THESIS", disabled=not can_call):
+             if can_call:
+                with st.spinner("Writing Thesis..."):
+                    st.session_state['last_ai_call_time'] = current_time
+                    thesis_text = ai.generate_deep_dive_thesis(
+                        ticker=selected_asset, price=curr, change=pct, regime=regime_data,
+                        ml_signal=ml_signal_str, gex_data=gex_summary, cot_data=cot_data,
+                        levels=key_levels, news_summary=news_text_summary, macro_data=macro_context_data, api_key=gemini_key
+                    )
+                    st.session_state['thesis_cache'] = thesis_text
+                    st.rerun()
+             else:
+                st.warning(f"Wait {int(cooldown - time_since_last)}s (Free Tier Throttling)")
 
         # PDF EXPORT
         st.markdown("---")
