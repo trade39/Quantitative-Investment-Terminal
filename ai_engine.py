@@ -9,6 +9,38 @@ try:
 except ImportError:
     HAS_NLP = False
 
+def get_gemini_model(api_key):
+    """
+    Helper to get the best available model with caching in session state.
+    Reduces API calls (list_models) to prevent hitting Free Tier limits.
+    """
+    if 'gemini_model_name' in st.session_state and st.session_state['gemini_model_name']:
+        return genai.GenerativeModel(st.session_state['gemini_model_name'])
+        
+    try:
+        genai.configure(api_key=api_key)
+        # Default fallback to Gemini 1.5 Flash (Most compatible for Free Tier)
+        preferred_model = "models/gemini-1.5-flash"
+        
+        # Verify if model is available, otherwise discovery
+        models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+        
+        if preferred_model in models:
+            st.session_state['gemini_model_name'] = preferred_model
+        elif models:
+            # Sort to pick flash models first if preferred not found
+            models.sort(key=lambda x: 'flash' not in x.lower())
+            st.session_state['gemini_model_name'] = models[0]
+        else:
+            return None
+            
+        return genai.GenerativeModel(st.session_state['gemini_model_name'])
+    except Exception as e:
+        if "429" in str(e):
+            st.error("⚠️ Gemini discovery failed: Rate limit exceeded. Using fallback.")
+            return genai.GenerativeModel("gemini-1.5-flash") # Hard fallback
+        return None
+
 def get_technical_narrative(ticker, price, daily_pct, regime, ml_signal, gex_data, cot_data, levels, macro_data, api_key):
     if not api_key: return "AI Analyst unavailable (No Key)."
     if 'gemini_calls' in st.session_state: st.session_state['gemini_calls'] += 1
@@ -41,24 +73,13 @@ def get_technical_narrative(ticker, price, daily_pct, regime, ml_signal, gex_dat
     Keep it concise. Bloomberg Terminal style.
     """
     try:
-        genai.configure(api_key=api_key)
-        
-        # Auto-discover models
-        available_models = []
-        for m in genai.list_models():
-            if 'generateContent' in m.supported_generation_methods:
-                available_models.append(m)
-        
-        if not available_models: return "Error: No valid models found. Check API Key permissions."
+        model = get_gemini_model(api_key)
+        if not model: return "Error: No valid models found. Check API Key."
             
-        available_models.sort(key=lambda x: 'flash' not in x.name)
-        chosen_model_name = available_models[0].name
-        
-        model = genai.GenerativeModel(chosen_model_name)
         response = model.generate_content(prompt)
         return response.text
     except Exception as e:
-        if "429" in str(e): return "⚠️ API LIMIT REACHED."
+        if "429" in str(e): return "⚠️ QUOTA EXCEEDED (Free Tier: 5 RPM). Please wait 60s."
         return f"AI Analyst unavailable: {str(e)}"
 
 def generate_deep_dive_thesis(ticker, price, change, regime, ml_signal, gex_data, cot_data, levels, news_summary, macro_data, api_key):
@@ -90,19 +111,13 @@ def generate_deep_dive_thesis(ticker, price, change, regime, ml_signal, gex_data
     ### 4. KEY LEVELS (Invalidation)
     """
     try:
-        genai.configure(api_key=api_key)
-        available_models = []
-        for m in genai.list_models():
-            if 'generateContent' in m.supported_generation_methods:
-                available_models.append(m)
-        if not available_models: return "Error: No valid models found."
-        available_models.sort(key=lambda x: 'flash' not in x.name)
-        chosen_model_name = available_models[0].name
+        model = get_gemini_model(api_key)
+        if not model: return "Error: No valid models found."
         
-        model = genai.GenerativeModel(chosen_model_name)
         response = model.generate_content(prompt)
         return response.text
     except Exception as e:
+        if "429" in str(e): return "⚠️ QUOTA EXCEEDED (Free Tier: 5 RPM). Please wait 60s."
         return f"Thesis Generation Failed: {str(e)}"
 
 def calculate_news_sentiment(news_items):
