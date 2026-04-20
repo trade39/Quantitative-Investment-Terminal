@@ -277,4 +277,27 @@ def fetch_cot_history(asset_name, start_year=2024):
         df_asset['date'] = pd.to_datetime(df_asset['date'], errors='coerce')
         df_asset = df_asset.sort_values('date')
         
-    return df_asset
+@st.cache_data(ttl=3600)
+def get_correlation_data(tickers, period="180d"):
+    """
+    Fetches historical data for a list of tickers and returns a DataFrame of daily returns.
+    """
+    if not tickers: return pd.DataFrame()
+    try:
+        # Fetch data for all tickers
+        df = safe_yf_download(tickers, period=period, interval="1d")
+        if df.empty: return pd.DataFrame()
+        
+        # Extract Close prices
+        if isinstance(df.columns, pd.MultiIndex):
+            if 'Close' in df.columns.get_level_values(0):
+                close_df = df.xs('Close', axis=1, level=0)
+            else:
+                close_df = df['Close']
+        else:
+            close_df = df[['Close']]
+            
+        # Calculate pct change
+        returns_df = close_df.pct_change().dropna()
+        return returns_df
+    except: return pd.DataFrame()
