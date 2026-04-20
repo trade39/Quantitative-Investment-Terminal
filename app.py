@@ -97,6 +97,7 @@ combined_news_for_llm = news_general[:5] + news_ff[:5]
 
 # Fetch FRED Macro
 df_yield = de.get_fred_series("T10Y2Y", fred_key)
+df_yield_3m = de.get_fred_series("T10Y3M", fred_key)
 df_ff = de.get_fred_series("FEDFUNDS", fred_key)
 df_cpi = de.get_fred_series("CPIAUCSL", fred_key)
 df_m2 = de.get_fred_series("M2SL", fred_key)
@@ -121,6 +122,14 @@ key_levels = qe.get_key_levels(daily_data)
 vwap_df = qe.calculate_vwap_bands(intraday_data)
 pred_dates, pred_paths = qe.generate_monte_carlo(daily_data)
 seasonality_stats = qe.get_seasonality_stats(daily_data, asset_info['ticker']) 
+
+# Recession & Correlation
+recession_prob = qe.calculate_recession_probability(df_yield_3m['value'].iloc[-1]) if not df_yield_3m.empty else 0
+yc_regime, yc_color = qe.get_yield_curve_regime(df_yield['value'].iloc[-1] if not df_yield.empty else None, df_yield_3m['value'].iloc[-1] if not df_yield_3m.empty else None)
+
+corr_tickers = list(set([asset_info['ticker'], "GC=F", "^GSPC", "EURUSD=X", "BTC-USD", "^TNX"]))
+corr_returns = de.get_correlation_data(corr_tickers)
+corr_matrix = qe.calculate_correlation_matrix(corr_returns)
 
 # advanced logic
 smc_data = qe.detect_smc_patterns(daily_data)
@@ -189,7 +198,33 @@ if not daily_data.empty:
 st.markdown("---")
 st.markdown("### 🌎 PHASE 1: MACRO & SENTIMENT CONTEXT")
 
-macro_tab1, macro_tab2 = st.tabs(["🇺🇸 MACRO DASHBOARD (FRED)", "📰 NEWS & CALENDAR"])
+macro_tab1, macro_tab2, macro_tab3 = st.tabs(["🇺🇸 MACRO DASHBOARD", "📰 NEWS & CALENDAR", "🕒 RECESSION CLOCK"])
+
+with macro_tab3:
+    if fred_key and not df_yield_3m.empty:
+        r1, r2 = st.columns([1, 2])
+        with r1:
+            st.markdown(f"""
+            <div class='terminal-box' style='text-align:center;'>
+                <div style='color:#AAAAAA; font-size:0.8em;'>NY FED MODEL</div>
+                <div style='font-size:2em; color:#00FFFF; font-weight:bold;'>{recession_prob:.1f}%</div>
+                <div style='font-size:0.8em; color:gray;'>Prob. of Recession (12M)</div>
+            </div>
+            """, unsafe_allow_html=True)
+            st.markdown(f"""
+            <div class='terminal-box' style='text-align:center; margin-top:10px;'>
+                 <div style='color:#AAAAAA; font-size:0.8em;'>CURVE REGIME</div>
+                 <div class='{yc_color}' style='font-size:1.1em;'>{yc_regime}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with r2:
+            fig_rc = go.Figure()
+            fig_rc.add_trace(go.Scatter(x=df_yield_3m.index, y=df_yield_3m['value'], name="10Y-3M Spread", fill='tozeroy', fillcolor='rgba(0, 255, 255, 0.1)', line=dict(color='#00FFFF')))
+            fig_rc.add_hline(y=0, line_dash="dash", line_color="white")
+            fig_rc = terminal_chart_layout(fig_rc, title="YIELD CURVE (10Y-3M) HISTORY", height=250)
+            st.plotly_chart(fig_rc, use_container_width=True)
+    else:
+        st.info("Recession data requires FRED API Key.")
 
 with macro_tab1:
     if fred_key:
@@ -348,7 +383,28 @@ with macro_tab2:
 st.markdown("---")
 st.markdown("### 🔭 PHASE 2: STRATEGIC ANALYSIS (Trend & Positioning)")
 
-strat_col1, strat_col2 = st.columns([2, 1])
+strat_main_tab, strat_corr_tab = st.tabs(["🔭 STRATEGIC ANALYSIS", "🗺️ INTER-MARKET CORRELATIONS"])
+
+with strat_corr_tab:
+    if not corr_matrix.empty:
+        fig_corr = go.Figure(data=go.Heatmap(
+            z=corr_matrix.values,
+            x=corr_matrix.columns,
+            y=corr_matrix.index,
+            colorscale=[[0, '#8080FF'], [0.5, '#12161F'], [1, '#00FFFF']],
+            zmin=-1, zmax=1,
+            text=np.around(corr_matrix.values, decimals=2),
+            texttemplate="%{text}",
+            showscale=True
+        ))
+        fig_corr = terminal_chart_layout(fig_corr, title="180D ASSET CORRELATION MATRIX", height=500)
+        st.plotly_chart(fig_corr, use_container_width=True)
+        st.caption("Context: 1.0 = Perfect Positive, -1.0 = Perfect Inverse. High absolute values indicate strong relationships.")
+    else:
+        st.info("Correlation data unavailable.")
+
+with strat_main_tab:
+    strat_col1, strat_col2 = st.columns([2, 1])
 
 with strat_col1:
     # --- CHART: MULTILAYER LIQUIDITY MAP ---
