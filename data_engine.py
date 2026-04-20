@@ -62,6 +62,33 @@ def get_intraday_data(ticker):
     try: return safe_yf_download(ticker, period="5d", interval="15m")
     except: return pd.DataFrame()
 
+@st.cache_data(ttl=300)
+def get_watchlist_data(tickers):
+    """Fetches current price and 1d change for a list of tickers."""
+    if not tickers: return pd.DataFrame()
+    try:
+        # Download 2 days worth of data to get current and previous close
+        df = safe_yf_download(tickers, period="2d", interval="1d")
+        if df.empty: return pd.DataFrame()
+        
+        results = []
+        for t in tickers:
+            try:
+                if isinstance(df.columns, pd.MultiIndex):
+                    # Multi-ticker download returns MultiIndex
+                    t_data = df.xs(t, level=1, axis=1) if t in df.columns.get_level_values(1) else df[t] if t in df.columns else None
+                else:
+                    t_data = df
+                
+                if t_data is not None and len(t_data) >= 1:
+                    curr = t_data['Close'].iloc[-1]
+                    prev = t_data['Close'].iloc[-2] if len(t_data) > 1 else curr
+                    pct = ((curr - prev) / prev) * 100 if prev != 0 else 0
+                    results.append({"ticker": t, "last": curr, "change": pct})
+            except: continue
+        return pd.DataFrame(results)
+    except: return pd.DataFrame()
+
 @st.cache_data(ttl=300) 
 def get_coingecko_stats(cg_id, api_key):
     if not cg_id or not api_key: return None
