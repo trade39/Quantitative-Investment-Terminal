@@ -75,3 +75,82 @@ def terminal_chart_layout(fig, title="", height=350):
         )
     )
     return fig
+
+def generate_pdf_report(data):
+    """
+    Generates a professional Institutional Brief PDF.
+    data: dict containing 'ticker', 'price', 'pct', 'narrative', 'thesis', 'levels', 'ml_signal', 'regime'
+    """
+    from io import BytesIO
+    from reportlab.lib.pagesizes import LETTER
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib import colors
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=LETTER, rightMargin=72, leftMargin=72, topMargin=72, bottomMargin=18)
+    styles = getSampleStyleSheet()
+    
+    # Custom Styles
+    title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], color=colors.hexColor("#00FFFF"), alignment=1, spaceAfter=20)
+    header_style = ParagraphStyle('HeaderStyle', parent=styles['Heading2'], color=colors.hexColor("#40E0FF"), spaceBefore=15, spaceAfter=10)
+    body_style = styles['Normal']
+    
+    elements = []
+    
+    # 1. Title
+    elements.append(Paragraph(f"BLOOMBERG TERMINAL PRO - INSTITUTIONAL BRIEF", title_style))
+    elements.append(Paragraph(f"ASSET: {data['ticker']} | DATE: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}", body_style))
+    elements.append(Spacer(1, 12))
+    
+    # 2. Executive HUD
+    elements.append(Paragraph("EXECUTIVE HUD METRICS", header_style))
+    hud_data = [
+        ["METRIC", "VALUE"],
+        ["CURRENT PRICE", f"{data['price']:,.2f} ({data['pct']:.2f}%)"],
+        ["AI ML SIGNAL", data['ml_signal']],
+        ["QUANT REGIME", data['regime']],
+    ]
+    t = Table(hud_data, colWidths=[150, 250])
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.hexColor("#12161F")),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.hexColor("#F5F5F5")),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey)
+    ]))
+    elements.append(t)
+    
+    # 3. AI Narrative
+    if data.get('narrative'):
+        elements.append(Paragraph("TECHNICAL NARRATIVE", header_style))
+        # Split by bullets if possible or just wrap
+        elements.append(Paragraph(data['narrative'].replace("\n", "<br/>"), body_style))
+        
+    # 4. Deep Thesis
+    if data.get('thesis'):
+        elements.append(Paragraph("INVESTMENT THESIS", header_style))
+        elements.append(Paragraph(data['thesis'].replace("\n", "<br/>"), body_style))
+        
+    # 5. Key Algo Levels
+    if data.get('levels'):
+        elements.append(Paragraph("KEY ALGO LEVELS", header_style))
+        lvl = data['levels']
+        lvl_data = [["LEVEL NAME", "PRICE"]]
+        for k, v in lvl.items():
+            lvl_data.append([k, f"{v:,.2f}"])
+            
+        lt = Table(lvl_data, colWidths=[150, 100])
+        lt.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.hexColor("#12161F")),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey)
+        ]))
+        elements.append(lt)
+
+    doc.build(elements)
+    pdf = buffer.getvalue()
+    buffer.close()
+    return pdf
