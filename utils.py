@@ -92,8 +92,8 @@ def generate_pdf_report(data):
     styles = getSampleStyleSheet()
     
     # Custom Styles
-    title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], color=colors.hexColor("#00FFFF"), alignment=1, spaceAfter=20)
-    header_style = ParagraphStyle('HeaderStyle', parent=styles['Heading2'], color=colors.hexColor("#40E0FF"), spaceBefore=15, spaceAfter=10)
+    title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], color=colors.HexColor("#00FFFF"), alignment=1, spaceAfter=20)
+    header_style = ParagraphStyle('HeaderStyle', parent=styles['Heading2'], color=colors.HexColor("#40E0FF"), spaceBefore=15, spaceAfter=10)
     body_style = styles['Normal']
     
     elements = []
@@ -113,12 +113,12 @@ def generate_pdf_report(data):
     ]
     t = Table(hud_data, colWidths=[150, 250])
     t.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.hexColor("#12161F")),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#12161F")),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.hexColor("#F5F5F5")),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor("#F5F5F5")),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.grey)
     ]))
     elements.append(t)
@@ -144,9 +144,9 @@ def generate_pdf_report(data):
             
         lt = Table(lvl_data, colWidths=[150, 100])
         lt.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.hexColor("#12161F")),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#12161F")),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey)
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#333333"))
         ]))
         elements.append(lt)
 
