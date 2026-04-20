@@ -545,3 +545,38 @@ def get_key_levels(daily_df):
         "PDH": high, "PDL": low, "PDC": close, "Pivot": pivot, 
         "R1": (2 * pivot) - low, "S1": (2 * pivot) - high
     }
+
+def calculate_correlation_matrix(returns_df):
+    """Computes the correlation matrix for the given returns DataFrame."""
+    if returns_df.empty: return pd.DataFrame()
+    return returns_df.corr()
+
+def calculate_recession_probability(spread_10y3m):
+    """
+    NY Fed simplified model: Probability = Norm.CDF(-0.533 + (-0.633 * Spread))
+    This is a simplified linear approximation of the probit model.
+    """
+    if spread_10y3m is None: return 0.0
+    # Probit-like approximation
+    # Note: Traditional spread is 10Y - 3M. If spread is negative, prob increases.
+    z_score = -0.533 - 0.633 * (spread_10y3m) 
+    prob = norm.cdf(z_score) * 100
+    return prob
+
+def get_yield_curve_regime(spread_10y2y, spread_10y3m):
+    """
+    Determines the Yield Curve regime based on spread levels and trends.
+    """
+    if spread_10y2y is None or spread_10y3m is None: return "Unknown", "neutral"
+    
+    # Logic for Clock
+    if spread_10y2y < 0 and spread_10y3m < 0:
+        return "INVERTED (High Recession Risk)", "bearish"
+    elif spread_10y2y < 0 or spread_10y3m < 0:
+        return "FLATTENING (Early Warning)", "neutral"
+    elif spread_10y2y > 0 and spread_10y2y < 0.5:
+        return "NORMAL (Low Growth)", "neutral"
+    elif spread_10y2y >= 0.5:
+        return "STEEPENING (Growth/Inflation)", "bullish"
+    
+    return "Neutral", "neutral"
