@@ -249,11 +249,16 @@ def fetch_cot_history(asset_name, start_year=2024):
             try: df_year = cot.cot_year(year=y, cot_report_type=report_type)
             except: pass
         
-        # Fallback Direct
+        # Fallback Direct — pick the correct CFTC zip based on report_type
         if df_year is None or df_year.empty:
             try:
-                url = f"https://www.cftc.gov/files/dea/history/deahistfo{y}.zip" 
-                r = requests.get(url)
+                if "disaggregated" in report_type:
+                    cftc_url = f"https://www.cftc.gov/files/dea/history/fut_disagg_txt_{y}.zip"
+                elif "financial" in report_type:
+                    cftc_url = f"https://www.cftc.gov/files/dea/history/fut_fin_txt_{y}.zip"
+                else:
+                    cftc_url = f"https://www.cftc.gov/files/dea/history/deahistfo{y}.zip"
+                r = requests.get(cftc_url, timeout=30)
                 if r.status_code == 200:
                     with zipfile.ZipFile(io.BytesIO(r.content)) as z:
                         filename = z.namelist()[0]
@@ -276,7 +281,11 @@ def fetch_cot_history(asset_name, start_year=2024):
     if 'date' in df_asset.columns:
         df_asset['date'] = pd.to_datetime(df_asset['date'], errors='coerce')
         df_asset = df_asset.sort_values('date')
-        
+
+    # Return None if no valid rows after filtering
+    if df_asset.empty: return None
+    return df_asset
+
 @st.cache_data(ttl=3600)
 def get_correlation_data(tickers, period="180d"):
     """
