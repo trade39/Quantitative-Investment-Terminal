@@ -369,28 +369,47 @@ def calculate_z_score(series, window=52):
 def get_market_regime(ticker):
     try:
         df = safe_yf_download(ticker, period="5y", interval="1d")
-        if df.empty: return None
+        if df.empty or len(df) < 50: 
+             # Fallback: Basic Volatility Regime
+             return {"regime": "NEUTRAL (Establishing)", "color": "neutral", "confidence": 0.5}
+             
         data = df.copy()
         data['Returns'] = data['Close'].pct_change()
         data['Volatility'] = data['Returns'].rolling(20).std()
         data = data.dropna()
-        X = data[['Returns', 'Volatility']].values
-        gmm = GaussianMixture(n_components=3, covariance_type="full", random_state=42)
-        gmm.fit(X)
-        current_state = gmm.predict(X[[-1]])[0]
-        probs = gmm.predict_proba(X[[-1]])[0]
-        means = gmm.means_
-        # Distinction between Trend and Compression
-        regime_desc = regime_map.get(current_state, "Unknown")
         
-        # If volatility is exceptionally low relative to history, it's Compression, not necessarily Trend
-        returns_vol = data['Returns'].std()
-        if regime_desc == "LOW VOL (Trend)" and data['Volatility'].iloc[-1] < returns_vol * 0.5:
-             regime_desc = "COMPRESSION (Breakout Pending)"
-             
-        color = "bullish" if "LOW VOL" in regime_desc else "bearish" if "HIGH VOL" in regime_desc else "neutral"
-        return {"regime": regime_desc, "color": color, "confidence": max(probs)}
-    except: return None
+        try:
+            X = data[['Returns', 'Volatility']].values
+            gmm = GaussianMixture(n_components=3, covariance_type="full", random_state=42)
+            gmm.fit(X)
+            current_state = gmm.predict(X[[-1]])[0]
+            probs = gmm.predict_proba(X[[-1]])[0]
+            means = gmm.means_
+            state_order = np.argsort(means[:, 1]) 
+            regime_map = {state_order[0]: "LOW VOL (Trend)", state_order[1]: "NEUTRAL (Chop)", state_order[2]: "HIGH VOL (Crisis)"}
+            
+            # Distinction between Trend and Compression
+            regime_desc = regime_map.get(current_state, "NEUTRAL (Transitional)")
+            
+            # If volatility is exceptionally low relative to history, it's Compression, not necessarily Trend
+            returns_vol = data['Returns'].std()
+            if regime_desc == "LOW VOL (Trend)" and data['Volatility'].iloc[-1] < returns_vol * 0.5:
+                 regime_desc = "COMPRESSION (Breakout Pending)"
+                 
+            color = "bullish" if "LOW VOL" in regime_desc else "bearish" if "HIGH VOL" in regime_desc else "neutral"
+            return {"regime": regime_desc, "color": color, "confidence": max(probs)}
+        except:
+            # Fallback to simple ATR/Standard Dev logic if GMM fails
+            current_vol = data['Volatility'].iloc[-1]
+            avg_vol = data['Volatility'].mean()
+            if current_vol > avg_vol * 1.5:
+                return {"regime": "HIGH VOL (Risk-Off)", "color": "bearish", "confidence": 0.7}
+            elif current_vol < avg_vol * 0.7:
+                return {"regime": "LOW VOL (Accumulation)", "color": "bullish", "confidence": 0.7}
+            else:
+                return {"regime": "STABLE (Defined Range)", "color": "neutral", "confidence": 0.6}
+    except: 
+        return {"regime": "STABLE (Defined Range)", "color": "neutral", "confidence": 0.5}
 
 @st.cache_data(ttl=86400)
 def get_macro_ml_regime(cpi_df, rate_df):
