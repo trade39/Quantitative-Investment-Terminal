@@ -153,6 +153,8 @@ macro_regime = None
 pred_dates, pred_paths = None, None
 seasonality_stats = None
 cot_history = pd.DataFrame()
+md_score, md_status, md_reasons = 0, "STABLE", []
+macro_risk = None
 
 # FRED Base Data (Used in HUD and AI Context)
 df_yield_3m = de.get_fred_series("T10Y3M", fred_key)
@@ -173,6 +175,17 @@ if not df_cpi.empty:
     except: pass
 if not df_ff.empty: macro_context_data['rates'] = f"{df_ff['value'].iloc[-1]:.2f}%"
 if macro_regime: macro_context_data['regime'] = macro_regime['regime']
+
+# --- NEW: ADVANCED RISK CALCULATIONS ---
+if not daily_data.empty:
+    md_score, md_status, md_reasons = qe.detect_momentum_deterioration(daily_data)
+    macro_context_data['momentum_score'] = md_score
+    macro_context_data['momentum_status'] = md_status
+if fred_key:
+    macro_risk = qe.calculate_macro_pressure(fred_key)
+    if macro_risk:
+        macro_context_data['macro_pressure_score'] = macro_risk['score']
+        macro_context_data['macro_pressure_status'] = macro_risk['status']
 
 # ==============================================================================
 # 2. HEAD-UP DISPLAY (HUD) - Immediate Situational Awareness
@@ -239,6 +252,45 @@ if not daily_data.empty:
                     <div class='{sig['col']}' style='font-size:0.9em;'>{sig['bias']}</div>
                 </div>
                 """, unsafe_allow_html=True)
+
+# ==============================================================================
+# 2.5 RISK ADVISORY: MOMENTUM DETERIORATION & MACRO PRESSURE
+# ==============================================================================
+st.markdown("<div style='margin-top:20px;'></div>", unsafe_allow_html=True)
+risk_c1, risk_c2 = st.columns(2)
+
+with risk_c1:
+    md_color = "#FF4B4B" if md_score >= 70 else "#FFA500" if md_score >= 30 else "#00FFFF"
+    st.markdown(f"""
+    <div class='terminal-box' style='border-left: 5px solid {md_color};'>
+        <div style='color:#AAAAAA; font-size:0.8em; text-transform:uppercase;'>Momentum Deterioration Index</div>
+        <div style='display:flex; align-items:baseline; gap:10px;'>
+            <span style='font-size:2em; font-weight:bold; color:{md_color};'>{md_score}</span>
+            <span style='font-size:1.1em; color:{md_color};'>{md_status}</span>
+        </div>
+        <div style='margin-top:5px;'>
+            {"".join([f"<div style='font-size:0.75em; color:#AAAAAA;'>• {r}</div>" for r in md_reasons]) if md_reasons else "<div style='font-size:0.75em; color:gray;'>No deterioration detected.</div>"}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with risk_c2:
+    if macro_risk:
+        mr_color = "#FF4B4B" if macro_risk['score'] >= 60 else "#FFA500" if macro_risk['score'] >= 30 else "#00FFFF"
+        st.markdown(f"""
+        <div class='terminal-box' style='border-left: 5px solid {mr_color};'>
+            <div style='color:#AAAAAA; font-size:0.8em; text-transform:uppercase;'>Macro Pressure Score</div>
+            <div style='display:flex; align-items:baseline; gap:10px;'>
+                <span style='font-size:2em; font-weight:bold; color:{mr_color};'>{macro_risk['score']}</span>
+                <span style='font-size:1.1em; color:{mr_color};'>{macro_risk['status']}</span>
+            </div>
+            <div style='margin-top:5px;'>
+                {"".join([f"<div style='font-size:0.75em; color:#AAAAAA;'>• {f}</div>" for f in macro_risk['factors']]) if macro_risk['factors'] else "<div style='font-size:0.75em; color:gray;'>Macro environment supportive.</div>"}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.info("Macro Risk analysis requires valid FRED API Key.")
 
 # ==============================================================================
 # 3. MACRO & SENTIMENT CONTEXT (THE "WEATHER")
