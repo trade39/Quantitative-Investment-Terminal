@@ -83,9 +83,30 @@ def detect_market_structure(df, window=5):
         last_sl = df[df['Swing_Low']]['Low'].iloc[-1]
         
         trend = "NEUTRAL"
-        if current_close > last_sh: trend = "BULLISH (BOS)"
-        elif current_close < last_sl: trend = "BEARISH (BOS)"
-        else: trend = "CONSOLIDATION (Internal Range)"
+        if current_close > last_sh: 
+            trend = "BULLISH (BOS)"
+        elif current_close < last_sl: 
+            trend = "BEARISH (BOS)"
+        else: 
+            # In an internal range, check Accumulation vs Distribution
+            range_height = last_sh - last_sl
+            if range_height > 0:
+                pos_in_range = (current_close - last_sl) / range_height
+                
+                # Use recent volume trend to confirm bias
+                recent_vol = df['Volume'].tail(5).mean()
+                avg_vol = df['Volume'].tail(20).mean()
+                vol_increasing = recent_vol > avg_vol
+                
+                bias = "Neutral Chop"
+                if pos_in_range > 0.6 and vol_increasing:
+                    bias = "Accumulation (Testing Highs)"
+                elif pos_in_range < 0.4 and vol_increasing:
+                    bias = "Distribution (Testing Lows)"
+                    
+                trend = f"RANGE [{last_sl:,.2f} - {last_sh:,.2f}] ({bias})"
+            else:
+                trend = "CONSOLIDATION (Internal Range)"
         
         return df, trend, last_sh, last_sl
     except:
