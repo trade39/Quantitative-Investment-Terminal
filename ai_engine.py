@@ -34,9 +34,12 @@ def get_genai_client(api_key):
         print(f"GenAI Client Init Error: {e}")
         return None
 
-def get_technical_narrative(ticker, price, daily_pct, regime, ml_signal, gex_data, cot_data, levels, macro_data, api_key, model_name=None, use_grounding=False):
+def get_technical_narrative(ticker, price, daily_pct, regime, ml_signal, gex_data, cot_data, levels, macro_data, api_key, model_name=None, use_grounding=False, ms_trend="N/A"):
     if not api_key: return "AI Analyst unavailable (No Key)."
     if 'gemini_calls' in st.session_state: st.session_state['gemini_calls'] += 1
+    
+    # Process Regime & Trend
+    regime_val = regime['regime'] if regime else 'Unknown'
     
     gex_text = "N/A"
     if gex_data is not None:
@@ -56,16 +59,16 @@ def get_technical_narrative(ticker, price, daily_pct, regime, ml_signal, gex_dat
 
     prompt = f"""
     You are a Senior Portfolio Manager. Analyze data for {ticker} and write a 3-bullet executive summary.
-    DATA: Price: {price:,.2f} ({daily_pct:.2f}%), Regime: {regime['regime'] if regime else 'Unknown'}, 
+    DATA: Price: {price:,.2f} ({daily_pct:.2f}%), Regime: {regime_val}, MarketStructure: {ms_trend},
     ML: {ml_signal}, GEX: {gex_text}, COT: {cot_str}, Levels: {lvl_text},
     MOMENTUM DETERIORATION: {macro_data.get('momentum_status', 'Stable')} (Score: {macro_data.get('momentum_score', 0)})
     MACRO CONTEXT: {macro_str}
     TASK:
-    1. PRIORITIZE PRICE ACTION: Use Market Structure and Levels as the primary signal.
-    2. CONTEXTUALIZE POSITIONING: Treat COT and GEX as secondary confirmation or potential headwinds, NOT as the primary driver.
-    3. Synthesize Technicals + Macro.
-    4. Identify key trigger level.
-    5. Final Execution bias ("Buy Dips", "Fade", etc).
+    1. REGIME ADHERENCE: If Regime is 'COMPRESSION', 'RANGE-BOUND', or 'CONSOLIDATION', DO NOT label it a trend. You MUST remain neutral or focused on 'range-play' unless price action is >0.5% daily.
+    2. DIRECTIONAL RIGOR: Do not assign a direction (Buy/Sell) if ML is 'NEUTRAL' AND MarketStructure is 'CONSOLIDATION'. In such cases, your bias MUST be 'Neutral/Wait'.
+    3. NO HALLUCINATION: Do not invent a 'bullish bias' just because price is slightly up (+0.1%) if the regime is range-bound.
+    4. PRIORITIZE PRICE ACTION: Use Market Structure and Levels as the primary signal.
+    5. Identify key trigger level and final execution bias.
     JD Capital Institutional style. Keep it concise.
     DO NOT use markdown symbols like ** or ##. Use plain text.
     """
@@ -95,9 +98,12 @@ def get_technical_narrative(ticker, price, daily_pct, regime, ml_signal, gex_dat
     
     return "AI Analyst Error: No compatible SDK found."
 
-def generate_deep_dive_thesis(ticker, price, change, regime, ml_signal, gex_data, cot_data, levels, news_summary, macro_data, api_key, model_name=None, use_grounding=False):
+def generate_deep_dive_thesis(ticker, price, change, regime, ml_signal, gex_data, cot_data, levels, news_summary, macro_data, api_key, model_name=None, use_grounding=False, ms_trend="N/A"):
     if not api_key: return "Deep Dive unavailable (No Key)."
     if 'gemini_calls' in st.session_state: st.session_state['gemini_calls'] += 1
+    
+    # Process Regime & Trend
+    regime_val = regime['regime'] if regime else 'Unknown'
     
     gex_text = "N/A"
     if gex_data is not None:
@@ -113,16 +119,16 @@ def generate_deep_dive_thesis(ticker, price, change, regime, ml_signal, gex_data
 
     prompt = f"""
     Write a detailed Investment Thesis for {ticker}.
-    DATA: Price: {price:,.2f} ({change:.2f}%), Regime: {regime['regime'] if regime else 'Unknown'}, 
+    DATA: Price: {price:,.2f} ({change:.2f}%), Regime: {regime_val}, MarketStructure: {ms_trend},
     ML: {ml_signal}, GEX: {gex_text}, COT: {cot_str}
     MACRO: {macro_str}
     NEWS: {news_summary}
     OUTPUT FORMAT:
     Use plain text. DO NOT use markdown characters like "##", "###", or "**".
-    1. PRICE ACTION & MARKET STRUCTURE (Primary Focus)
-    2. INSTITUTIONAL POSITIONING & FLOW (Confirmation/Headwinds)
+    1. PRICE ACTION & MARKET STRUCTURE (Primary Focus: Distinguish between Trend vs Range. If MarketStructure is CONSOLIDATION, highlight the lack of trend.)
+    2. INSTITUTIONAL POSITIONING & FLOW (Confirmation/Headwinds: If net signals are mixed, state 'Mixed Flow'.)
     3. THE MACRO CROSSROADS
-    4. CORE THESIS & EXECUTION BIAS
+    4. CORE THESIS & EXECUTION BIAS (Strict adherence to data: If MarketStructure=CONSOLIDATION and ML=NEUTRAL, bias MUST be NEUTRAL.)
     5. KEY LEVELS & INVALIDATION
     """
 
