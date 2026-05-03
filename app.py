@@ -9,7 +9,7 @@ from utils import get_api_key, terminal_chart_layout
 import data_engine as de
 import quant_engine as qe
 import ai_engine as ai
-from utils import generate_pdf_report
+from utils import generate_pdf_report, parse_eco_value, analyze_eco_context, generate_cot_analysis
 
 # --- APP CONFIGURATION ---
 st.set_page_config(layout="wide", page_title="JD Capital Quantitative Investment Terminal", page_icon="static/logo.png")
@@ -173,22 +173,22 @@ if not daily_data.empty:
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("LAST PX", f"{curr:,.2f}", f"{pct:.2f}%")
     
-    # ML Signal
-    ml_bias = "BULLISH" if ml_prob > 0.55 else "BEARISH" if ml_prob < 0.45 else "NEUTRAL"
+    # ML Signal (CONSOLIDATED)
+    ml_signal = "BULLISH" if ml_prob > config.THRESHOLDS['ML_BULLISH'] else "BEARISH" if ml_prob < config.THRESHOLDS['ML_BEARISH'] else "NEUTRAL"
     ml_conf = abs(ml_prob - 0.5) * 200
-    ml_color = "bullish" if ml_bias == "BULLISH" else "bearish" if ml_bias == "BEARISH" else "neutral"
+    ml_color = "bullish" if ml_signal == "BULLISH" else "bearish" if ml_signal == "BEARISH" else "neutral"
     
     c2.markdown(f"""
     <div class='terminal-box' style="text-align:center; padding:5px;">
         <div style="font-size:0.8em; color:#00FFFF;">AI PREDICTION</div>
-        <span class='{ml_color}'>{ml_bias}</span>
+        <span class='{ml_color}'>{ml_signal}</span>
         <div style="font-size:0.8em; margin-top:5px; color:#AAAAAA;">CONF: {ml_conf:.0f}%</div>
     </div>
     """, unsafe_allow_html=True)
     
     # Regime
-    hurst_type = "TRENDING" if hurst > 0.55 else "MEAN REVERT" if hurst < 0.45 else "RANDOM WALK"
-    h_color = "#00FFFF" if hurst > 0.55 else "#8080FF" if hurst < 0.45 else "gray"
+    hurst_type = "TRENDING" if hurst > config.THRESHOLDS['HURST_TRENDING'] else "MEAN REVERT" if hurst < config.THRESHOLDS['HURST_MEAN_REVERT'] else "RANDOM WALK"
+    h_color = "#00FFFF" if hurst > config.THRESHOLDS['HURST_TRENDING'] else "#8080FF" if hurst < config.THRESHOLDS['HURST_MEAN_REVERT'] else "gray"
     
     if regime_data:
         c3.markdown(f"""
@@ -238,11 +238,14 @@ with macro_tab3:
             </div>
             """, unsafe_allow_html=True)
         with r2:
-            fig_rc = go.Figure()
-            fig_rc.add_trace(go.Scatter(x=df_yield_3m.index, y=df_yield_3m['value'], name="10Y-3M Spread", fill='tozeroy', fillcolor='rgba(0, 255, 255, 0.1)', line=dict(color='#00FFFF')))
-            fig_rc.add_hline(y=0, line_dash="dash", line_color="white")
-            fig_rc = terminal_chart_layout(fig_rc, title="YIELD CURVE (10Y-3M) HISTORY", height=250)
-            st.plotly_chart(fig_rc, use_container_width=True)
+            try:
+                fig_rc = go.Figure()
+                fig_rc.add_trace(go.Scatter(x=df_yield_3m.index, y=df_yield_3m['value'], name="10Y-3M Spread", fill='tozeroy', fillcolor='rgba(0, 255, 255, 0.1)', line=dict(color='#00FFFF')))
+                fig_rc.add_hline(y=0, line_dash="dash", line_color="white")
+                fig_rc = terminal_chart_layout(fig_rc, title="YIELD CURVE (10Y-3M) HISTORY", height=250)
+                st.plotly_chart(fig_rc, use_container_width=True)
+            except Exception as e:
+                st.warning("Recession chart unavailable")
     else:
         st.info("Recession data requires FRED API Key.")
 
@@ -260,19 +263,23 @@ with macro_tab1:
                     if not df_yield.empty:
                         curr_yield = df_yield['value'].iloc[-1]
                         yield_color = "#8080FF" if curr_yield < 0 else "#00FFFF"
-                        fig_yc = go.Figure()
-                        fig_yc.add_trace(go.Scatter(x=df_yield.index, y=df_yield['value'], fill='tozeroy', fillcolor='rgba(102, 204, 255, 0.2)', line=dict(color=yield_color)))
-                        fig_yc.add_hline(y=0, line_dash="dash", line_color="white")
-                        fig_yc = terminal_chart_layout(fig_yc, title=f"10Y-2Y SPREAD: {curr_yield:.2f}%", height=200)
-                        st.plotly_chart(fig_yc, use_container_width=True)
+                        try:
+                            fig_yc = go.Figure()
+                            fig_yc.add_trace(go.Scatter(x=df_yield.index, y=df_yield['value'], fill='tozeroy', fillcolor='rgba(102, 204, 255, 0.2)', line=dict(color=yield_color)))
+                            fig_yc.add_hline(y=0, line_dash="dash", line_color="white")
+                            fig_yc = terminal_chart_layout(fig_yc, title=f"10Y-2Y SPREAD: {curr_yield:.2f}%", height=200)
+                            st.plotly_chart(fig_yc, use_container_width=True)
+                        except: st.warning("Yield chart error")
                         st.caption("CONTEXT: " + ("⚠️ RECESSION SIGNAL" if curr_yield < 0 else "NORMAL GROWTH"))
                 with c_m2:
                      # RESTORED: Fed Funds Chart
                     if not df_ff.empty:
-                        fig_ff = go.Figure()
-                        fig_ff.add_trace(go.Scatter(x=df_ff.index, y=df_ff['value'], line=dict(color="#40E0FF")))
-                        fig_ff = terminal_chart_layout(fig_ff, title=f"FED FUNDS: {df_ff['value'].iloc[-1]:.2f}%", height=200)
-                        st.plotly_chart(fig_ff, use_container_width=True)
+                        try:
+                            fig_ff = go.Figure()
+                            fig_ff.add_trace(go.Scatter(x=df_ff.index, y=df_ff['value'], line=dict(color="#40E0FF")))
+                            fig_ff = terminal_chart_layout(fig_ff, title=f"FED FUNDS: {df_ff['value'].iloc[-1]:.2f}%", height=200)
+                            st.plotly_chart(fig_ff, use_container_width=True)
+                        except: st.warning("Rates chart error")
                         st.caption("CONTEXT: BASELINE RISK-FREE RATE")
 
             with mt_inner_2:
@@ -281,18 +288,22 @@ with macro_tab1:
                     # CPI
                     if not df_cpi.empty:
                         df_cpi['YoY'] = df_cpi['value'].pct_change(12) * 100
-                        fig_cpi = go.Figure()
-                        fig_cpi.add_trace(go.Bar(x=df_cpi.index, y=df_cpi['YoY'], marker_color='#00FFFF'))
-                        fig_cpi = terminal_chart_layout(fig_cpi, title=f"CPI (YoY): {df_cpi['YoY'].iloc[-1]:.2f}%", height=200)
-                        st.plotly_chart(fig_cpi, use_container_width=True)
+                        try:
+                            fig_cpi = go.Figure()
+                            fig_cpi.add_trace(go.Bar(x=df_cpi.index, y=df_cpi['YoY'], marker_color='#00FFFF'))
+                            fig_cpi = terminal_chart_layout(fig_cpi, title=f"CPI (YoY): {df_cpi['YoY'].iloc[-1]:.2f}%", height=200)
+                            st.plotly_chart(fig_cpi, use_container_width=True)
+                        except: st.warning("CPI chart error")
                         st.caption("TARGET: 2.0%")
                 with c_m4:
                      # M2
                     if not df_m2.empty:
-                        fig_m2 = go.Figure()
-                        fig_m2.add_trace(go.Scatter(x=df_m2.index, y=df_m2['value'], line=dict(color="#00FFFF")))
-                        fig_m2 = terminal_chart_layout(fig_m2, title="M2 LIQUIDITY", height=200)
-                        st.plotly_chart(fig_m2, use_container_width=True)
+                        try:
+                            fig_m2 = go.Figure()
+                            fig_m2.add_trace(go.Scatter(x=df_m2.index, y=df_m2['value'], line=dict(color="#00FFFF")))
+                            fig_m2 = terminal_chart_layout(fig_m2, title="M2 LIQUIDITY", height=200)
+                            st.plotly_chart(fig_m2, use_container_width=True)
+                        except: st.warning("M2 chart error")
                         st.caption("CONTEXT: MONEY SUPPLY")
 
         with macro_col_ml:
@@ -323,34 +334,7 @@ with macro_tab1:
 with macro_tab2:
     col_eco, col_news = st.columns([1, 1])
     
-    # Economic Calendar Logic
-    def parse_eco_value(val_str):
-        if not isinstance(val_str, str) or val_str == '': return None
-        clean = val_str.replace('%', '').replace(',', '')
-        multiplier = 1.0
-        if 'K' in clean.upper(): multiplier = 1000.0; clean = clean.upper().replace('K', '')
-        elif 'M' in clean.upper(): multiplier = 1000000.0; clean = clean.upper().replace('M', '')
-        elif 'B' in clean.upper(): multiplier = 1000000000.0; clean = clean.upper().replace('B', '')
-        try: return float(clean) * multiplier
-        except: return None
-
-    def analyze_eco_context(actual_str, forecast_str, previous_str):
-        is_happened = actual_str is not None and actual_str != ""
-        val_actual = parse_eco_value(actual_str)
-        val_forecast = parse_eco_value(forecast_str)
-        val_prev = parse_eco_value(previous_str)
-        context_str = ""
-        bias = "Neutral"
-        if is_happened:
-            if val_actual is not None and val_forecast is not None:
-                context_str = f"Act {actual_str} / Est {forecast_str}"
-                delta = val_actual - val_forecast
-                if delta > 0: bias = "Bullish"
-                else: bias = "Bearish"
-            else: context_str = f"Actual: {actual_str}"
-        else:
-             context_str = f"Est {forecast_str}" if forecast_str else "Waiting..."
-        return context_str, bias
+    # (Helper functions moved to utils.py)
 
     with col_eco:
         st.markdown("**📅 HIGH IMPACT EVENTS (USD)**")
@@ -372,13 +356,15 @@ with macro_tab2:
     with col_news:
         st.markdown(f"**📰 {asset_info.get('news_query', 'LATEST')} WIRE**")
         if ai.HAS_NLP and not news_sentiment_df.empty:
-             fig_sent = go.Figure()
-             fig_sent.add_trace(go.Scatter(
-                 x=news_sentiment_df.index, y=news_sentiment_df['cumulative'],
-                 mode='lines+markers', line=dict(color='#00FFFF', width=2), name="Sentiment"))
-             fig_sent = terminal_chart_layout(fig_sent, title="SENTIMENT VELOCITY", height=150)
-             fig_sent.update_layout(xaxis=dict(showgrid=False, visible=False))
-             st.plotly_chart(fig_sent, use_container_width=True)
+             try:
+                 fig_sent = go.Figure()
+                 fig_sent.add_trace(go.Scatter(
+                     x=news_sentiment_df.index, y=news_sentiment_df['cumulative'],
+                     mode='lines+markers', line=dict(color='#00FFFF', width=2), name="Sentiment"))
+                 fig_sent = terminal_chart_layout(fig_sent, title="SENTIMENT VELOCITY", height=150)
+                 fig_sent.update_layout(xaxis=dict(showgrid=False, visible=False))
+                 st.plotly_chart(fig_sent, use_container_width=True)
+             except: st.warning("Sentiment chart error")
         
         # RESTORED: Tabs for General vs Forex Factory
         tab_gen, tab_ff = st.tabs(["📰 GENERAL", "⚡ FOREX FACTORY"])
@@ -407,19 +393,21 @@ strat_main_tab, strat_corr_tab = st.tabs(["🔭 STRATEGIC ANALYSIS", "🗺️ IN
 
 with strat_corr_tab:
     if not corr_matrix.empty:
-        fig_corr = go.Figure(data=go.Heatmap(
-            z=corr_matrix.values,
-            x=corr_matrix.columns,
-            y=corr_matrix.index,
-            colorscale=[[0, '#8080FF'], [0.5, '#12161F'], [1, '#00FFFF']],
-            zmin=-1, zmax=1,
-            text=np.around(corr_matrix.values, decimals=2),
-            texttemplate="%{text}",
-            showscale=True
-        ))
-        fig_corr = terminal_chart_layout(fig_corr, title="180D ASSET CORRELATION MATRIX", height=500)
-        st.plotly_chart(fig_corr, use_container_width=True)
-        st.caption("Context: 1.0 = Perfect Positive, -1.0 = Perfect Inverse. High absolute values indicate strong relationships.")
+        try:
+            fig_corr = go.Figure(data=go.Heatmap(
+                z=corr_matrix.values,
+                x=corr_matrix.columns,
+                y=corr_matrix.index,
+                colorscale=[[0, '#8080FF'], [0.5, '#12161F'], [1, '#00FFFF']],
+                zmin=-1, zmax=1,
+                text=np.around(corr_matrix.values, decimals=2),
+                texttemplate="%{text}",
+                showscale=True
+            ))
+            fig_corr = terminal_chart_layout(fig_corr, title="180D ASSET CORRELATION MATRIX", height=500)
+            st.plotly_chart(fig_corr, use_container_width=True)
+            st.caption("Context: 1.0 = Perfect Positive, -1.0 = Perfect Inverse. High absolute values indicate strong relationships.")
+        except: st.warning("Correlation Matrix error")
     else:
         st.info("Correlation data unavailable.")
 
@@ -465,13 +453,16 @@ with strat_main_tab:
                 dxy_aligned = dxy_data['Close'].reindex(daily_data.index, method='ffill')
                 fig.add_trace(go.Scatter(x=dxy_aligned.index, y=dxy_aligned.values, name="DXY", line=dict(color='#8080FF', width=2), opacity=0.5, yaxis="y2"))
     
-            fig = terminal_chart_layout(fig, height=500)
-            fig.update_layout(
-                yaxis=dict(title="Price"),
-                yaxis2=dict(title="DXY", overlaying="y", side="right", showgrid=False, tickfont=dict(color="#8080FF")),
-                legend=dict(orientation="h", y=1.02, x=0, bgcolor="rgba(0,0,0,0)")
-            )
-            st.plotly_chart(fig, use_container_width=True)
+            try:
+                fig = terminal_chart_layout(fig, height=500)
+                fig.update_layout(
+                    yaxis=dict(title="Price"),
+                    yaxis2=dict(title="DXY", overlaying="y", side="right", showgrid=False, tickfont=dict(color="#8080FF")),
+                    legend=dict(orientation="h", y=1.02, x=0, bgcolor="rgba(0,0,0,0)")
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            except Exception as e:
+                st.warning("Main Liquidity Chart unavailable")
     
     with strat_col2:
         # --- MARKET STRUCTURE DETAILS ---
@@ -489,10 +480,12 @@ with strat_main_tab:
         # --- MONTE CARLO ---
         st.markdown("**🎲 PROBABILITY PATH**")
         if pred_dates is not None and pred_paths is not None:
-            fig_pred = go.Figure()
-            fig_pred.add_trace(go.Scatter(x=pred_dates, y=np.mean(pred_paths, axis=1), name='Avg Path', line=dict(color='#00FFFF', dash='dash')))
-            fig_pred = terminal_chart_layout(fig_pred, title="MC FORECAST (126 Days)", height=200)
-            st.plotly_chart(fig_pred, use_container_width=True)
+            try:
+                fig_pred = go.Figure()
+                fig_pred.add_trace(go.Scatter(x=pred_dates, y=np.mean(pred_paths, axis=1), name='Avg Path', line=dict(color='#00FFFF', dash='dash')))
+                fig_pred = terminal_chart_layout(fig_pred, title="MC FORECAST (126 Days)", height=200)
+                st.plotly_chart(fig_pred, use_container_width=True)
+            except: st.warning("Forecast chart error")
             
         # --- RESTORED: SEASONALITY TABS ---
         if seasonality_stats:
@@ -501,12 +494,14 @@ with strat_main_tab:
             
             with tab_hour:
                 if 'hourly_perf' in seasonality_stats and seasonality_stats['hourly_perf'] is not None:
-                    hp = seasonality_stats['hourly_perf']
-                    fig_h = go.Figure()
-                    colors = ['#00FFFF' if v > 0 else '#8080FF' for v in hp.values]
-                    fig_h.add_trace(go.Bar(x=[f"{h:02d}:00" for h in hp.index], y=hp.values, marker_color=colors))
-                    fig_h = terminal_chart_layout(fig_h, title="AVG RETURN BY HOUR", height=200)
-                    st.plotly_chart(fig_h, use_container_width=True)
+                    try:
+                        hp = seasonality_stats['hourly_perf']
+                        fig_h = go.Figure()
+                        colors = ['#00FFFF' if v > 0 else '#8080FF' for v in hp.values]
+                        fig_h.add_trace(go.Bar(x=[f"{h:02d}:00" for h in hp.index], y=hp.values, marker_color=colors))
+                        fig_h = terminal_chart_layout(fig_h, title="AVG RETURN BY HOUR", height=200)
+                        st.plotly_chart(fig_h, use_container_width=True)
+                    except: st.warning("Hourly chart error")
             
             with tab_day:
                 if 'day_high' in seasonality_stats:
@@ -527,15 +522,7 @@ with strat_main_tab:
 # --- 4B. COT & FUNDAMENTALS (RESTORED FULL DETAIL) ---
 with st.expander("🏛️ INSTITUTIONAL POSITIONING (COT) & FUNDAMENTALS", expanded=True):
     
-    # HELPER FUNCTION FOR TEXT ANALYSIS
-    def generate_cot_analysis(spec_net, hedge_net, spec_label, hedge_label):
-        spec_sent = "🟢 BULLISH" if spec_net > 0 else "🔴 BEARISH"
-        hedge_sent = "🟢 BULLISH" if hedge_net > 0 else "🔴 BEARISH"
-        if (spec_net > 0 and hedge_net < 0) or (spec_net < 0 and hedge_net > 0):
-            structure = "✅ **Healthy Structure:** Risk Transfer active."
-        else:
-            structure = "⚠️ **Anomaly:** Groups positioned same side."
-        return f"* **{spec_label}:** {spec_sent} (Net: {int(spec_net):,})\n* **{hedge_label}:** {hedge_sent}\n{structure}"
+    # (Helper functions moved to utils.py)
 
     cot_col, fund_col = st.columns([2, 1])
     
@@ -571,29 +558,35 @@ with st.expander("🏛️ INSTITUTIONAL POSITIONING (COT) & FUNDAMENTALS", expan
             tab_trend, tab_struct, tab_osc = st.tabs(["📈 NET TREND", "🦋 STRUCTURE", "📊 Z-SCORE"])
             
             with tab_trend:
-                fig_trend = go.Figure()
-                fig_trend.add_trace(go.Scatter(x=cot_history['date'], y=cot_history['Net Speculator'], name=spec_label, line=dict(color='#00FFFF', width=2)))
-                fig_trend.add_trace(go.Scatter(x=cot_history['date'], y=cot_history['Net Hedger'], name=hedge_label, line=dict(color='#8080FF', width=2)))
-                fig_trend.add_hline(y=0, line_dash="dash", line_color="gray")
-                fig_trend = terminal_chart_layout(fig_trend, title="NET POSITIONING HISTORY", height=300)
-                st.plotly_chart(fig_trend, use_container_width=True)
+                try:
+                    fig_trend = go.Figure()
+                    fig_trend.add_trace(go.Scatter(x=cot_history['date'], y=cot_history['Net Speculator'], name=spec_label, line=dict(color='#00FFFF', width=2)))
+                    fig_trend.add_trace(go.Scatter(x=cot_history['date'], y=cot_history['Net Hedger'], name=hedge_label, line=dict(color='#8080FF', width=2)))
+                    fig_trend.add_hline(y=0, line_dash="dash", line_color="gray")
+                    fig_trend = terminal_chart_layout(fig_trend, title="NET POSITIONING HISTORY", height=300)
+                    st.plotly_chart(fig_trend, use_container_width=True)
+                except: st.warning("COT Trend chart error")
 
             with tab_struct:
-                fig_struct = go.Figure()
-                fig_struct.add_trace(go.Bar(x=cot_history['date'], y=cot_history['spec_long'], name=f"{spec_label} Longs", marker_color='#00FFFF'))
-                fig_struct.add_trace(go.Bar(x=cot_history['date'], y=-cot_history['spec_short'], name=f"{spec_label} Shorts", marker_color='#8080FF'))
-                fig_struct.update_layout(barmode='overlay')
-                fig_struct = terminal_chart_layout(fig_struct, title="BUTTERFLY CHART (Long vs Short)", height=300)
-                st.plotly_chart(fig_struct, use_container_width=True)
+                try:
+                    fig_struct = go.Figure()
+                    fig_struct.add_trace(go.Bar(x=cot_history['date'], y=cot_history['spec_long'], name=f"{spec_label} Longs", marker_color='#00FFFF'))
+                    fig_struct.add_trace(go.Bar(x=cot_history['date'], y=-cot_history['spec_short'], name=f"{spec_label} Shorts", marker_color='#8080FF'))
+                    fig_struct.update_layout(barmode='overlay')
+                    fig_struct = terminal_chart_layout(fig_struct, title="BUTTERFLY CHART (Long vs Short)", height=300)
+                    st.plotly_chart(fig_struct, use_container_width=True)
+                except: st.warning("COT Structure chart error")
 
             with tab_osc:
-                fig_z = go.Figure()
-                colors = ['#8080FF' if val > 2 or val < -2 else '#333' for val in cot_history['Spec Z-Score']]
-                fig_z.add_trace(go.Bar(x=cot_history['date'], y=cot_history['Spec Z-Score'], marker_color=colors))
-                fig_z.add_hline(y=2, line_dash="dot", line_color="#8080FF")
-                fig_z.add_hline(y=-2, line_dash="dot", line_color="#8080FF")
-                fig_z = terminal_chart_layout(fig_z, title="OSCILLATOR (Z-Score)", height=300)
-                st.plotly_chart(fig_z, use_container_width=True)
+                try:
+                    fig_z = go.Figure()
+                    colors = ['#8080FF' if val > 2 or val < -2 else '#333' for val in cot_history['Spec Z-Score']]
+                    fig_z.add_trace(go.Bar(x=cot_history['date'], y=cot_history['Spec Z-Score'], marker_color=colors))
+                    fig_z.add_hline(y=2, line_dash="dot", line_color="#8080FF")
+                    fig_z.add_hline(y=-2, line_dash="dot", line_color="#8080FF")
+                    fig_z = terminal_chart_layout(fig_z, title="OSCILLATOR (Z-Score)", height=300)
+                    st.plotly_chart(fig_z, use_container_width=True)
+                except: st.warning("COT Oscillator chart error")
 
         else:
             st.info("COT Data unavailable for this asset.")
@@ -638,12 +631,14 @@ with dyn_col1:
         
         center_strike = gex_spot 
         gex_zoom = gex_df[(gex_df['strike'] > center_strike * 0.9) & (gex_df['strike'] < center_strike * 1.1)]
-        fig_gex = go.Figure()
-        colors = ['#00FFFF' if x > 0 else '#8080FF' for x in gex_zoom['gex']]
-        fig_gex.add_trace(go.Bar(x=gex_zoom['strike'], y=gex_zoom['gex'], marker_color=colors))
-        fig_gex.add_vline(x=center_strike, line_dash="dot", line_color="white")
-        fig_gex = terminal_chart_layout(fig_gex, title="GAMMA PROFILE", height=200)
-        st.plotly_chart(fig_gex, use_container_width=True)
+        try:
+            fig_gex = go.Figure()
+            colors = ['#00FFFF' if x > 0 else '#8080FF' for x in gex_zoom['gex']]
+            fig_gex.add_trace(go.Bar(x=gex_zoom['strike'], y=gex_zoom['gex'], marker_color=colors))
+            fig_gex.add_vline(x=center_strike, line_dash="dot", line_color="white")
+            fig_gex = terminal_chart_layout(fig_gex, title="GAMMA PROFILE", height=200)
+            st.plotly_chart(fig_gex, use_container_width=True)
+        except: st.warning("Gamma Profile error")
     else: st.info("No Options Data")
 
 with dyn_col2:
@@ -682,12 +677,14 @@ with dyn_col3:
     </div>
     """, unsafe_allow_html=True)
     if vol_profile is not None:
-         fig_vp = go.Figure()
-         colors = ['#00FFFF' if x == poc_price else '#333' for x in vol_profile['PriceLevel']]
-         fig_vp.add_trace(go.Bar(y=vol_profile['PriceLevel'], x=vol_profile['Volume'], orientation='h', marker_color='#40E0FF', opacity=0.4))
-         fig_vp.add_hline(y=poc_price, line_dash="dash", line_color="#FFFFFF", annotation_text="POC")
-         fig_vp = terminal_chart_layout(fig_vp, title="INTRADAY VOLUME PROFILE", height=200)
-         st.plotly_chart(fig_vp, use_container_width=True)
+         try:
+             fig_vp = go.Figure()
+             colors = ['#00FFFF' if x == poc_price else '#333' for x in vol_profile['PriceLevel']]
+             fig_vp.add_trace(go.Bar(y=vol_profile['PriceLevel'], x=vol_profile['Volume'], orientation='h', marker_color='#40E0FF', opacity=0.4))
+             fig_vp.add_hline(y=poc_price, line_dash="dash", line_color="#FFFFFF", annotation_text="POC")
+             fig_vp = terminal_chart_layout(fig_vp, title="INTRADAY VOLUME PROFILE", height=200)
+             st.plotly_chart(fig_vp, use_container_width=True)
+         except: st.warning("Volume Profile error")
 
 # ==============================================================================
 # 6. TACTICAL EXECUTION (ENTRY/EXIT)
@@ -700,19 +697,21 @@ exe_col1, exe_col2 = st.columns([2, 1])
 with exe_col1:
     st.markdown("**SESSION VWAP + KEY LEVELS**")
     if not vwap_df.empty:
-        fig_vwap = go.Figure()
-        fig_vwap.add_trace(go.Candlestick(x=vwap_df.index, open=vwap_df['Open'], high=vwap_df['High'], low=vwap_df['Low'], close=vwap_df['Close'], name="Price", increasing_line_color="#00FFFF", decreasing_line_color="#405060"))
-        fig_vwap.add_trace(go.Scatter(x=vwap_df.index, y=vwap_df['VWAP'], name="Session VWAP", line=dict(color='#FFFFFF', width=2)))
-        fig_vwap.add_trace(go.Scatter(x=vwap_df.index, y=vwap_df['Upper_Band_1'], name="+1 STD", line=dict(color='gray', width=1), opacity=0.3))
-        fig_vwap.add_trace(go.Scatter(x=vwap_df.index, y=vwap_df['Lower_Band_1'], name="-1 STD", line=dict(color='gray', width=1), opacity=0.3))
-        
-        if key_levels:
-            fig_vwap.add_hline(y=key_levels['PDH'], line_dash="dot", line_color="#8080FF", annotation_text="PDH")
-            fig_vwap.add_hline(y=key_levels['PDL'], line_dash="dot", line_color="#00FFFF", annotation_text="PDL")
-            fig_vwap.add_hline(y=key_levels['Pivot'], line_width=1, line_color="#40E0FF", annotation_text="DAILY PIVOT")
+        try:
+            fig_vwap = go.Figure()
+            fig_vwap.add_trace(go.Candlestick(x=vwap_df.index, open=vwap_df['Open'], high=vwap_df['High'], low=vwap_df['Low'], close=vwap_df['Close'], name="Price", increasing_line_color="#00FFFF", decreasing_line_color="#405060"))
+            fig_vwap.add_trace(go.Scatter(x=vwap_df.index, y=vwap_df['VWAP'], name="Session VWAP", line=dict(color='#FFFFFF', width=2)))
+            fig_vwap.add_trace(go.Scatter(x=vwap_df.index, y=vwap_df['Upper_Band_1'], name="+1 STD", line=dict(color='gray', width=1), opacity=0.3))
+            fig_vwap.add_trace(go.Scatter(x=vwap_df.index, y=vwap_df['Lower_Band_1'], name="-1 STD", line=dict(color='gray', width=1), opacity=0.3))
             
-        fig_vwap = terminal_chart_layout(fig_vwap, height=450)
-        st.plotly_chart(fig_vwap, use_container_width=True)
+            if key_levels:
+                fig_vwap.add_hline(y=key_levels['PDH'], line_dash="dot", line_color="#8080FF", annotation_text="PDH")
+                fig_vwap.add_hline(y=key_levels['PDL'], line_dash="dot", line_color="#00FFFF", annotation_text="PDL")
+                fig_vwap.add_hline(y=key_levels['Pivot'], line_width=1, line_color="#40E0FF", annotation_text="DAILY PIVOT")
+                
+            fig_vwap = terminal_chart_layout(fig_vwap, height=450)
+            st.plotly_chart(fig_vwap, use_container_width=True)
+        except: st.warning("VWAP chart error")
 
         # RESTORED: Key Levels Text List
         if key_levels:
@@ -723,7 +722,7 @@ with exe_col1:
             c_lvl_cols = st.columns(5)
             for i, (name, price) in enumerate(levels_list):
                  dist = abs(price - cur_price) / cur_price
-                 color = "#FFFF00" if dist < 0.002 else "#8080FF" if price > cur_price else "#00FFFF"
+                 color = "#FFFF00" if dist < config.THRESHOLDS['LEVEL_PROXIMITY'] else "#8080FF" if price > cur_price else "#00FFFF"
                  with c_lvl_cols[i]:
                      st.markdown(f"<div style='font-size:0.8em; color:gray;'>{name}</div><div style='color:{color}; font-family:monospace;'>{price:,.2f}</div>", unsafe_allow_html=True)
 
@@ -735,11 +734,13 @@ with exe_col2:
         rs_text = "OUTPERFORMING" if curr_rs > 0 else "UNDERPERFORMING"
         st.markdown(f"<span style='color:{rs_color}; font-weight:bold;'>{rs_text}</span>", unsafe_allow_html=True)
         
-        fig_rs = go.Figure()
-        fig_rs.add_hline(y=0, line_color="#333", line_dash="dash")
-        fig_rs.add_trace(go.Scatter(x=rs_data.index, y=rs_data['RS_Score'], mode='lines', line=dict(color=rs_color, width=2), fill='tozeroy', fillcolor='rgba(102, 204, 255, 0.2)'))
-        fig_rs = terminal_chart_layout(fig_rs, height=150)
-        st.plotly_chart(fig_rs, use_container_width=True)
+        try:
+            fig_rs = go.Figure()
+            fig_rs.add_hline(y=0, line_color="#333", line_dash="dash")
+            fig_rs.add_trace(go.Scatter(x=rs_data.index, y=rs_data['RS_Score'], mode='lines', line=dict(color=rs_color, width=2), fill='tozeroy', fillcolor='rgba(102, 204, 255, 0.2)'))
+            fig_rs = terminal_chart_layout(fig_rs, height=150)
+            st.plotly_chart(fig_rs, use_container_width=True)
+        except: st.warning("RS chart error")
     
     st.markdown("**RISK / BACKTEST**")
     strat_perf = qe.run_strategy_backtest(asset_info['ticker'])
@@ -749,12 +750,14 @@ with exe_col2:
         st.metric("Sharpe", f"{strat_perf['sharpe']:.2f}")
         
         # RESTORED: Equity Curve Chart
-        ec_df = pd.DataFrame({"Strategy": strat_perf['equity_curve'], "Buy & Hold": strat_perf['df']['Cum_BnH']})
-        fig_perf = go.Figure()
-        fig_perf.add_trace(go.Scatter(x=ec_df.index, y=ec_df['Buy & Hold'], name="Buy & Hold", line=dict(color='#8080FF', dash='dot')))
-        fig_perf.add_trace(go.Scatter(x=ec_df.index, y=ec_df['Strategy'], name="Active Strat", line=dict(color='#00FFFF', width=2), fill='tozeroy', fillcolor='rgba(102, 204, 255, 0.1)'))
-        fig_perf = terminal_chart_layout(fig_perf, title="STRATEGY EDGE", height=200)
-        st.plotly_chart(fig_perf, use_container_width=True)
+        try:
+            ec_df = pd.DataFrame({"Strategy": strat_perf['equity_curve'], "Buy & Hold": strat_perf['df']['Cum_BnH']})
+            fig_perf = go.Figure()
+            fig_perf.add_trace(go.Scatter(x=ec_df.index, y=ec_df['Buy & Hold'], name="Buy & Hold", line=dict(color='#8080FF', dash='dot')))
+            fig_perf.add_trace(go.Scatter(x=ec_df.index, y=ec_df['Strategy'], name="Active Strat", line=dict(color='#00FFFF', width=2), fill='tozeroy', fillcolor='rgba(102, 204, 255, 0.1)'))
+            fig_perf = terminal_chart_layout(fig_perf, title="STRATEGY EDGE", height=200)
+            st.plotly_chart(fig_perf, use_container_width=True)
+        except: st.warning("Backtest chart error")
 
 # ==============================================================================
 # 7. AI SYNTHESIS (THE CONCLUSION)
@@ -772,7 +775,7 @@ if gemini_key:
     with c_ai1:
         import time
         current_time = time.time()
-        cooldown = 20 # 20 second cooldown between AI calls to stay under 5 RPM
+        cooldown = config.THRESHOLDS['AI_COOLDOWN']
         time_since_last = current_time - st.session_state['last_ai_call_time']
         can_call = time_since_last > cooldown
         
@@ -782,7 +785,7 @@ if gemini_key:
                     st.session_state['last_ai_call_time'] = current_time
                     narrative = ai.get_technical_narrative(
                         ticker=selected_asset, price=curr, daily_pct=pct, regime=regime_data,
-                        ml_signal=ml_signal_str, gex_data=gex_summary, cot_data=cot_data,
+                        ml_signal=ml_signal, gex_data=gex_summary, cot_data=cot_data,
                         levels=key_levels, macro_data=macro_context_data, api_key=gemini_key
                     )
                     st.session_state['narrative_cache'] = narrative
@@ -796,7 +799,7 @@ if gemini_key:
                     st.session_state['last_ai_call_time'] = current_time
                     thesis_text = ai.generate_deep_dive_thesis(
                         ticker=selected_asset, price=curr, change=pct, regime=regime_data,
-                        ml_signal=ml_signal_str, gex_data=gex_summary, cot_data=cot_data,
+                        ml_signal=ml_signal, gex_data=gex_summary, cot_data=cot_data,
                         levels=key_levels, news_summary=news_text_summary, macro_data=macro_context_data, api_key=gemini_key
                     )
                     st.session_state['thesis_cache'] = thesis_text
@@ -821,7 +824,7 @@ if gemini_key:
 
             pdf_data = {
                 "ticker": selected_asset, "price": curr, "pct": pct,
-                "ml_signal": ml_bias, "regime": regime_data['regime'] if regime_data else "N/A",
+                "ml_signal": ml_signal, "regime": regime_data['regime'] if regime_data else "N/A",
                 "narrative": st.session_state['narrative_cache'],
                 "thesis": st.session_state['thesis_cache'],
                 "levels": key_levels,
