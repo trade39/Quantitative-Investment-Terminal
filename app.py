@@ -927,7 +927,8 @@ if gemini_key:
                         ticker=selected_asset, price=curr, daily_pct=pct, regime=regime_data,
                         ml_signal=ml_signal, gex_data=gex_summary, cot_data=cot_data,
                         levels=key_levels, macro_data=macro_context_data, api_key=gemini_key, 
-                        model_name=config.GEMINI_MODEL_NAME, use_grounding=use_grounding
+                        model_name=config.GEMINI_MODEL_NAME, use_grounding=use_grounding,
+                        ms_trend=ms_trend
                     )
                     st.session_state['narrative_cache'] = narrative
                     st.rerun()
@@ -948,7 +949,8 @@ if gemini_key:
                         ticker=selected_asset, price=curr, change=pct, regime=regime_data,
                         ml_signal=ml_signal, gex_data=gex_summary, cot_data=cot_data,
                         levels=key_levels, news_summary=news_text_summary, macro_data=macro_context_data, 
-                        api_key=gemini_key, model_name=config.GEMINI_MODEL_NAME, use_grounding=use_grounding
+                        api_key=gemini_key, model_name=config.GEMINI_MODEL_NAME, use_grounding=use_grounding,
+                        ms_trend=ms_trend
                     )
                     st.session_state['thesis_cache'] = thesis_text
                     st.rerun()
