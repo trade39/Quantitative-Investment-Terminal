@@ -68,7 +68,7 @@ def get_technical_narrative(ticker, price, daily_pct, regime, ml_signal, gex_dat
     2. STRICT NEUTRALITY PRE-BREAKOUT: A 'Boundary Test' is NOT a directional bias. If the price is in the 'NO-TRADE CHOP ZONE', expressly forbid entering new positions until boundaries are tested.
     3. TRIGGER-BASED EXECUTION: Provide actionable triggers WITH acceptance criteria (e.g., "Wait for daily close > [High] with volume confirmation"). Do not front-run the breakout.
     4. PRIORITIZE PRICE ACTION: Use Market Structure and Levels as the primary signal.
-    5. INTEGRATE NEWS: Explicitly mention any relevant news or macroeconomic catalysts provided or found via search, and how they impact the execution plan.
+    5. INTEGRATE NEWS: You MUST use your Google Search tool to find live, real-time news specifically about {ticker} today. Ignore irrelevant static news. Explicitly detail how these live catalysts impact the execution plan.
     JD Capital Institutional style. Elaborate deeply on the technical and macro interactions.
     DO NOT use markdown symbols like ** or ##. Use plain text.
     """
@@ -127,7 +127,7 @@ def generate_deep_dive_thesis(ticker, price, change, regime, ml_signal, gex_data
     Use plain text. DO NOT use markdown characters like "##", "###", or "**". Elaborate deeply on each section.
     1. PRICE ACTION & MARKET STRUCTURE (Primary Focus: Distinguish Trend vs Range. If RANGE, define boundaries. Identify if it is a 'Boundary Test' or 'NO-TRADE CHOP ZONE'.)
     2. INSTITUTIONAL POSITIONING & FLOW (Analyze how options gamma and COT positioning affect potential volatility.)
-    3. THE MACRO CROSSROADS & RECENT NEWS (Critically analyze the provided macro data AND explicitly detail how the provided recent news items or web search results are driving current sentiment.)
+    3. THE MACRO CROSSROADS & RECENT NEWS (You MUST use your Google Search tool to find live, real-time news specifically about {ticker} today. Ignore the generic provided NEWS if it is irrelevant. Detail how live events drive current sentiment.)
     4. CORE THESIS & EXECUTION BIAS (Provide Trigger-Based Execution. State the explicit Acceptance Criteria required for the breakout. If in the Chop Zone, advise patience.)
     5. KEY LEVELS & INVALIDATION (Define precise levels and what price action would invalidate the thesis.)
     """
