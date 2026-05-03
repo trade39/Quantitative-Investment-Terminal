@@ -54,10 +54,12 @@ def get_technical_narrative(ticker, price, daily_pct, regime, ml_signal, gex_dat
     MOMENTUM DETERIORATION: {macro_data.get('momentum_status', 'Stable')} (Score: {macro_data.get('momentum_score', 0)})
     MACRO CONTEXT: {macro_str}
     TASK:
-    1. Synthesize Technicals + Macro.
-    2. Identify key trigger level.
-    3. Final Execution bias ("Buy Dips", "Fade", etc).
-    Keep it concise. JD Capital Institutional style. 
+    1. PRIORITIZE PRICE ACTION: Use Market Structure and Levels as the primary signal.
+    2. CONTEXTUALIZE POSITIONING: Treat COT and GEX as secondary confirmation or potential headwinds, NOT as the primary driver.
+    3. Synthesize Technicals + Macro.
+    4. Identify key trigger level.
+    5. Final Execution bias ("Buy Dips", "Fade", etc).
+    JD Capital Institutional style. Keep it concise.
     DO NOT use markdown symbols like ** or ##. Use plain text.
     """
     try:
@@ -94,12 +96,12 @@ def generate_deep_dive_thesis(ticker, price, change, regime, ml_signal, gex_data
     MACRO: {macro_str}
     NEWS: {news_summary}
     OUTPUT FORMAT:
-    Use plain text. DO NOT use markdown characters like "##", "###", or "**" for bolding. 
-    Use clear section titles without hashes.
-    1. THE MACRO & TECHNICAL CROSSROADS
-    2. CORE ARGUMENT (Long/Short/Neutral)
-    3. THE BEAR/BULL CASE (Risks)
-    4. KEY LEVELS (Invalidation)
+    Use plain text. DO NOT use markdown characters like "##", "###", or "**".
+    1. PRICE ACTION & MARKET STRUCTURE (Primary Focus)
+    2. INSTITUTIONAL POSITIONING & FLOW (Confirmation/Headwinds)
+    3. THE MACRO CROSSROADS
+    4. CORE THESIS & EXECUTION BIAS
+    5. KEY LEVELS & INVALIDATION
     """
     try:
         model = get_gemini_model(api_key)
