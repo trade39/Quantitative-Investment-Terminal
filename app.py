@@ -45,10 +45,21 @@ with st.sidebar:
     
     with st.expander("📡 API QUOTA MONITOR", expanded=True):
         st.markdown("<div style='font-size:0.7em; color:#AAAAAA;'>Session Usage vs Hard Limits</div>", unsafe_allow_html=True)
+        import time
+        last_call = st.session_state.get('last_ai_call_time', 0)
+        time_passed = time.time() - last_call
+        cooldown = config.THRESHOLDS.get('AI_COOLDOWN', 20)
+        ready_in = max(0, int(cooldown - time_passed))
+        
+        st.write(f"**Gemini AI (Free Tier)**")
+        if ready_in > 0:
+            st.warning(f"Throttled: Ready in {ready_in}s")
+        else:
+            st.success("Ready for Synthesis")
+        st.progress(min(time_passed / cooldown, 1.0) if ready_in > 0 else 1.0)
+        
         st.write(f"**NewsAPI** ({st.session_state['news_calls']} / 100)")
         st.progress(min(st.session_state['news_calls'] / 100, 1.0))
-        st.write(f"**Gemini AI (Free)** ({st.session_state['gemini_calls']} / 5 RPM)")
-        st.progress(min(st.session_state['gemini_calls'] / 20, 1.0)) # Keeping visual progress for session, but note the 5 RPM limit
         st.write(f"**RapidAPI** ({st.session_state['rapid_calls']} / 10)")
         st.progress(min(st.session_state['rapid_calls'] / 10, 1.0))
         st.write(f"**FRED** ({st.session_state['fred_calls']} calls)")
@@ -74,7 +85,7 @@ with st.sidebar:
     
     st.markdown("---")
     with st.expander("🌍 MARKET PULSE", expanded=True):
-        watchlist_tickers = [v['ticker'] for v in config.ASSETS.values()]
+        watchlist_tickers = [v['ticker'] for v in list(config.ASSETS.values())[:6]] # Only top 6 for speed
         watchlist_df = de.get_watchlist_data(watchlist_tickers)
         if not watchlist_df.empty:
             for _, row in watchlist_df.iterrows():
@@ -89,25 +100,28 @@ with st.sidebar:
         st.rerun()
 
 # ==============================================================================
-# 1. CENTRALIZED DATA FETCHING ENGINE
+# 1. CENTRALIZED DATA FETCHING ENGINE (CORE ONLY)
 # ==============================================================================
-# Fetch Market Data
+# Essential Market Data (Required for HUD and base logic)
 daily_data = de.get_daily_data(asset_info['ticker'])
-dxy_data = de.get_dxy_data(fred_key) 
-intraday_data = de.get_intraday_data(asset_info['ticker'])
-eco_events = de.get_economic_calendar(rapid_key, use_demo=use_demo_data)
+curr = daily_data['Close'].iloc[-1] if not daily_data.empty else 0
+high = daily_data['High'] if not daily_data.empty else pd.Series([0])
+low = daily_data['Low'] if not daily_data.empty else pd.Series([0])
+pct = ((daily_data['Close'].iloc[-1] / daily_data['Close'].iloc[-2]) - 1) * 100 if len(daily_data) > 1 else 0
 
-# Fetch News
-news_general = de.get_financial_news_general(news_key, query=asset_info.get('news_query', 'Finance'))
-news_ff = de.get_forex_factory_news(rapid_key, 'breaking')
-combined_news_for_llm = news_general[:5] + news_ff[:5]
+# Advanced Engines (Lazy Loading prioritized in tabs)
+_, ml_prob = qe.get_ml_prediction(asset_info['ticker'])
+regime_data = qe.get_market_regime(asset_info['ticker'])
+hurst = qe.calculate_hurst(daily_data['Close'].values) if not daily_data.empty else 0.5
+ml_signal = "BULLISH" if ml_prob > config.THRESHOLDS['ML_BULLISH'] else "BEARISH" if ml_prob < config.THRESHOLDS['ML_BEARISH'] else "NEUTRAL"
 
-# Fetch FRED Macro
-df_yield = de.get_fred_series("T10Y2Y", fred_key)
-df_yield_3m = de.get_fred_series("T10Y3M", fred_key)
-df_ff = de.get_fred_series("FEDFUNDS", fred_key)
-df_cpi = de.get_fred_series("CPIAUCSL", fred_key)
-df_m2 = de.get_fred_series("M2SL", fred_key)
+# Multilayer Technicals (Initial fetch for HUD)
+key_levels = qe.get_key_levels(daily_data)
+radar_signals = qe.calculate_technical_radar(daily_data)
+
+# State for Asset Change Confirmation
+if 'last_analyzed_asset' not in st.session_state: st.session_state['last_analyzed_asset'] = selected_asset
+show_regen_warning = st.session_state['last_analyzed_asset'] != selected_asset
 
 # Advanced Engines
 _, ml_prob = qe.get_ml_prediction(asset_info['ticker'])
@@ -130,14 +144,12 @@ vwap_df = qe.calculate_vwap_bands(intraday_data)
 pred_dates, pred_paths = qe.generate_monte_carlo(daily_data)
 seasonality_stats = qe.get_seasonality_stats(daily_data, asset_info['ticker']) 
 
-# Recession & Correlation
+# Recession & Correlation (Initial check)
+df_yield_3m = de.get_fred_series("T10Y3M", fred_key)
 recession_prob = qe.calculate_recession_probability(df_yield_3m['value'].iloc[-1]) if not df_yield_3m.empty else 0
+df_yield = de.get_fred_series("T10Y2Y", fred_key)
 yc_regime, yc_color = qe.get_yield_curve_regime(df_yield['value'].iloc[-1] if not df_yield.empty else None, df_yield_3m['value'].iloc[-1] if not df_yield_3m.empty else None)
 yc_impact = qe.get_regime_impact(yc_regime, asset_info['ticker'])
-
-corr_tickers = list(set([asset_info['ticker'], "GC=F", "^GSPC", "EURUSD=X", "BTC-USD", "^TNX"]))
-corr_returns = de.get_correlation_data(corr_tickers)
-corr_matrix = qe.calculate_correlation_matrix(corr_returns)
 
 # advanced logic
 smc_data = qe.detect_smc_patterns(daily_data)
@@ -205,6 +217,19 @@ if not daily_data.empty:
         c3.info("Calculating Regime...")
     
     c4.metric("HIGH/LOW", f"{high.max():,.2f} / {low.min():,.2f}")
+    
+    # RADAR SIGNALS SCOREBOARD
+    if radar_signals:
+        st.markdown("<div style='margin-top:10px;'></div>", unsafe_allow_html=True)
+        r_cols = st.columns(3)
+        for i, (key, sig) in enumerate(radar_signals.items()):
+            with r_cols[i]:
+                st.markdown(f"""
+                <div class='terminal-box' style="text-align:center; padding:5px; border: 1px solid #1E252F;">
+                    <div style="font-size:0.7em; color:#AAAAAA; text-transform:uppercase;">{key}</div>
+                    <div class='{sig['col']}' style='font-size:0.9em;'>{sig['bias']}</div>
+                </div>
+                """, unsafe_allow_html=True)
 
 # ==============================================================================
 # 3. MACRO & SENTIMENT CONTEXT (THE "WEATHER")
@@ -251,7 +276,14 @@ with macro_tab3:
 
 with macro_tab1:
     if fred_key:
-        macro_col_main, macro_col_ml = st.columns([3, 1])
+        with st.spinner("Fetching Macro Data..."):
+            df_ff = de.get_fred_series("FEDFUNDS", fred_key)
+            df_cpi = de.get_fred_series("CPIAUCSL", fred_key)
+            df_m2 = de.get_fred_series("M2SL", fred_key)
+            macro_regime = qe.get_macro_ml_regime(df_cpi, df_ff)
+            correlations = qe.get_correlations(asset_info['ticker'], fred_key)
+            
+        macro_col_main, macro_col_ml = st.columns([2, 1]) # Consolidated for mobile
         with macro_col_main:
             # RESTORED: Inner tabs to fit 4 charts properly
             mt_inner_1, mt_inner_2 = st.tabs(["YIELD CURVE & RATES", "INFLATION & LIQUIDITY"])
@@ -332,6 +364,12 @@ with macro_tab1:
         st.info("Add `fred_api_key` to view Fed Macro Data.")
 
 with macro_tab2:
+    with st.spinner("Loading Intel..."):
+        news_general = de.get_financial_news_general(news_key, query=asset_info.get('news_query', 'Finance'))
+        news_ff = de.get_forex_factory_news(rapid_key, 'breaking')
+        eco_events = de.get_economic_calendar(rapid_key, use_demo=use_demo_data)
+        news_sentiment_df = ai.calculate_news_sentiment(news_general[:5] + news_ff[:5])
+
     col_eco, col_news = st.columns([1, 1])
     
     # (Helper functions moved to utils.py)
@@ -392,6 +430,11 @@ st.markdown("### 🔭 PHASE 2: STRATEGIC ANALYSIS (Trend & Positioning)")
 strat_main_tab, strat_corr_tab = st.tabs(["🔭 STRATEGIC ANALYSIS", "🗺️ INTER-MARKET CORRELATIONS"])
 
 with strat_corr_tab:
+    with st.spinner("Calculating Correlations..."):
+        corr_tickers = list(set([asset_info['ticker'], "GC=F", "^GSPC", "EURUSD=X", "BTC-USD", "^TNX"]))
+        corr_returns = de.get_correlation_data(corr_tickers)
+        corr_matrix = qe.calculate_correlation_matrix(corr_returns)
+        
     if not corr_matrix.empty:
         try:
             fig_corr = go.Figure(data=go.Heatmap(
@@ -412,6 +455,15 @@ with strat_corr_tab:
         st.info("Correlation data unavailable.")
 
 with strat_main_tab:
+    with st.spinner("Analyzing Market Structure..."):
+        intraday_data = de.get_intraday_data(asset_info['ticker'])
+        dxy_data = de.get_dxy_data(fred_key)
+        ms_df, ms_trend, ms_last_sh, ms_last_sl = qe.detect_market_structure(daily_data)
+        active_fvgs = qe.detect_fair_value_gaps(daily_data)
+        smc_data = qe.detect_smc_patterns(daily_data)
+        vol_profile, poc_price = qe.calculate_volume_profile(intraday_data)
+        val, vah = qe.calculate_value_area(vol_profile)
+        
     strat_col1, strat_col2 = st.columns([2, 1])
 
     with strat_col1:
@@ -521,7 +573,11 @@ with strat_main_tab:
 
 # --- 4B. COT & FUNDAMENTALS (RESTORED FULL DETAIL) ---
 with st.expander("🏛️ INSTITUTIONAL POSITIONING (COT) & FUNDAMENTALS", expanded=True):
-    
+    with st.spinner("Fetching Institutional Data..."):
+        cot_history = de.fetch_cot_history(selected_asset, start_year=2024)
+        cg_id = asset_info.get('cg_id')
+        cg_data = de.get_coingecko_stats(cg_id, cg_key) if cg_id else None
+        
     # (Helper functions moved to utils.py)
 
     cot_col, fund_col = st.columns([2, 1])
@@ -611,8 +667,14 @@ with st.expander("🏛️ INSTITUTIONAL POSITIONING (COT) & FUNDAMENTALS", expan
 # ==============================================================================
 # 5. MARKET DYNAMICS (VOLATILITY & FLOW)
 # ==============================================================================
+# --- PHASE 3: MARKET DYNAMICS ---
 st.markdown("---")
 st.markdown("### ⚙️ PHASE 3: MARKET DYNAMICS (Vol & Flow)")
+
+with st.spinner("Calculating Volatility Surface..."):
+    gex_df, gex_date, gex_spot, current_iv = qe.get_gex_profile(asset_info['opt_ticker'])
+    vol_cone = qe.get_volatility_cone(daily_data)
+    of_df, of_bias = qe.calculate_order_flow_proxy(daily_data)
 
 dyn_col1, dyn_col2, dyn_col3 = st.columns(3)
 
@@ -696,6 +758,9 @@ exe_col1, exe_col2 = st.columns([2, 1])
 
 with exe_col1:
     st.markdown("**SESSION VWAP + KEY LEVELS**")
+    with st.spinner("Calculating VWAP..."):
+        vwap_df = qe.calculate_vwap_bands(intraday_data)
+        
     if not vwap_df.empty:
         try:
             fig_vwap = go.Figure()
@@ -719,11 +784,11 @@ with exe_col1:
             cur_price = intraday_data['Close'].iloc[-1] if not intraday_data.empty else 0
             levels_list = [("R1 (Resist)", key_levels['R1']), ("PDH (High)", key_levels['PDH']), ("PIVOT", key_levels['Pivot']), ("PDL (Low)", key_levels['PDL']), ("S1 (Support)", key_levels['S1'])]
             
-            c_lvl_cols = st.columns(5)
+            c_lvl_cols = st.columns(3)
             for i, (name, price) in enumerate(levels_list):
                  dist = abs(price - cur_price) / cur_price
                  color = "#FFFF00" if dist < config.THRESHOLDS['LEVEL_PROXIMITY'] else "#8080FF" if price > cur_price else "#00FFFF"
-                 with c_lvl_cols[i]:
+                 with c_lvl_cols[i % 3]:
                      st.markdown(f"<div style='font-size:0.8em; color:gray;'>{name}</div><div style='color:{color}; font-family:monospace;'>{price:,.2f}</div>", unsafe_allow_html=True)
 
 with exe_col2:
@@ -762,12 +827,16 @@ with exe_col2:
 # ==============================================================================
 # 7. AI SYNTHESIS (THE CONCLUSION)
 # ==============================================================================
+# --- PHASE 5: AI SYNTHESIS ---
 st.markdown("---")
 st.markdown("### 🧠 PHASE 5: AI SYNTHESIS")
 
+if show_regen_warning:
+    st.info(f"🔄 Asset changed to **{selected_asset}**. AI synthesis below may be stale. Regenerate to update.")
+
 # Prepare Data for LLM
 gex_summary = gex_df if gex_df is not None else None
-ml_signal_str = "BULLISH" if ml_prob > 0.55 else "BEARISH" if ml_prob < 0.45 else "NEUTRAL"
+combined_news_for_llm = news_general[:5] + news_ff[:5] if 'news_general' in locals() else []
 news_text_summary = "\n".join([f"- {n['title']} ({n['source']})" for n in combined_news_for_llm])
 
 if gemini_key:
@@ -783,6 +852,7 @@ if gemini_key:
             if can_call:
                 with st.spinner("Synthesizing..."):
                     st.session_state['last_ai_call_time'] = current_time
+                    st.session_state['last_analyzed_asset'] = selected_asset # Update analyzed asset
                     narrative = ai.get_technical_narrative(
                         ticker=selected_asset, price=curr, daily_pct=pct, regime=regime_data,
                         ml_signal=ml_signal, gex_data=gex_summary, cot_data=cot_data,
@@ -791,12 +861,18 @@ if gemini_key:
                     st.session_state['narrative_cache'] = narrative
                     st.rerun()
             else:
-                st.warning(f"Wait {int(cooldown - time_since_last)}s (Free Tier Throttling)")
+                # LIVE COUNTDOWN UX
+                countdown_placeholder = st.empty()
+                for i in range(int(cooldown - time_since_last), 0, -1):
+                    countdown_placeholder.warning(f"Throttling: Auto-unlock in {i}s...")
+                    time.sleep(1)
+                st.rerun()
                 
         if st.button("🔎 GENERATE DEEP THESIS", disabled=not can_call):
              if can_call:
                 with st.spinner("Writing Thesis..."):
                     st.session_state['last_ai_call_time'] = current_time
+                    st.session_state['last_analyzed_asset'] = selected_asset
                     thesis_text = ai.generate_deep_dive_thesis(
                         ticker=selected_asset, price=curr, change=pct, regime=regime_data,
                         ml_signal=ml_signal, gex_data=gex_summary, cot_data=cot_data,
@@ -805,7 +881,12 @@ if gemini_key:
                     st.session_state['thesis_cache'] = thesis_text
                     st.rerun()
              else:
-                st.warning(f"Wait {int(cooldown - time_since_last)}s (Free Tier Throttling)")
+                # Same live countdown logic
+                countdown_placeholder = st.empty()
+                for i in range(int(cooldown - time_since_last), 0, -1):
+                    countdown_placeholder.warning(f"Throttling: Auto-unlock in {i}s...")
+                    time.sleep(1)
+                st.rerun()
 
         # PDF EXPORT
         st.markdown("---")
