@@ -38,7 +38,12 @@ def get_volatility_cone(df, windows=[5, 20, 60]):
     
     # Statistical Regime
     rank = (current_vol - res['min_20']) / (res['max_20'] - res['min_20'])
-    regime = "COMPRESSED (Breakout Soon)" if rank < 0.2 else "EXPANDED (Mean Revert)" if rank > 0.8 else "NORMAL"
+    if rank < 0.2:
+        regime = "COMPRESSION (Volatility Squeeze)"
+    elif rank > 0.8:
+        regime = "EXPANDED (Volatility Mean-Reversion)"
+    else:
+        regime = "STABLE (Trend Environment)"
     return {"data": res, "regime": regime, "rank": rank}
 
 # --- 2. MARKET STRUCTURE & LIQUIDITY ---
@@ -251,14 +256,27 @@ def detect_momentum_deterioration(df):
         score += 30
         reasons.append("Momentum Deceleration (ROC Slope < 0)")
         
-    # 3. Volume-Price Divergence
+    # 3. Volume-Price Divergence (Churning check)
     vol_sma = df['Volume'].rolling(20).mean()
-    if df['Close'].iloc[-1] > df['Close'].iloc[-5] and df['Volume'].iloc[-1] < vol_sma.iloc[-1]:
-        score += 30
-        reasons.append("Volume/Price Divergence (Rising Price, Falling Volume)")
+    price_move = abs(df['Close'].iloc[-1] - df['Close'].iloc[-5])
+    vol_impulse = df['Volume'].tail(5).mean() / vol_sma.iloc[-1]
+    
+    if price_move < (df['Close'].iloc[-1] * 0.005) and vol_impulse > 1.5:
+        score += 25
+        reasons.append("Institutional Churning (High Vol, Low Price Progress)")
+
+    # 4. EMA Slope Decay
+    df['EMA20'] = df['Close'].ewm(span=20).mean()
+    df['EMA50'] = df['Close'].ewm(span=50).mean()
+    df['Gap'] = (df['EMA20'] - df['EMA50']) / df['EMA50']
+    gap_slope = df['Gap'].tail(5).diff().mean()
+    
+    if df['Gap'].iloc[-1] > 0 and gap_slope < 0:
+        score += 25
+        reasons.append("EMA Compression (Trend Convergence)")
 
     status = "STABLE"
-    if score >= 70: status = "CRITICAL DETERIORATION"
+    if score >= 60: status = "CRITICAL DETERIORATION"
     elif score >= 30: status = "MODERATE WEAKNESS"
     
     return score, status, reasons
@@ -362,9 +380,14 @@ def get_market_regime(ticker):
         current_state = gmm.predict(X[[-1]])[0]
         probs = gmm.predict_proba(X[[-1]])[0]
         means = gmm.means_
-        state_order = np.argsort(means[:, 1]) 
-        regime_map = {state_order[0]: "LOW VOL (Trend)", state_order[1]: "NEUTRAL (Chop)", state_order[2]: "HIGH VOL (Crisis)"}
+        # Distinction between Trend and Compression
         regime_desc = regime_map.get(current_state, "Unknown")
+        
+        # If volatility is exceptionally low relative to history, it's Compression, not necessarily Trend
+        returns_vol = data['Returns'].std()
+        if regime_desc == "LOW VOL (Trend)" and data['Volatility'].iloc[-1] < returns_vol * 0.5:
+             regime_desc = "COMPRESSION (Breakout Pending)"
+             
         color = "bullish" if "LOW VOL" in regime_desc else "bearish" if "HIGH VOL" in regime_desc else "neutral"
         return {"regime": regime_desc, "color": color, "confidence": max(probs)}
     except: return None
@@ -545,11 +568,16 @@ def calculate_technical_radar(df):
     elif macd_hist < 0 and last['MACD'] < 0: signals['MACD'] = {"val": f"{macd_hist:.2f}", "bias": "BEARISH", "col": "bearish"}
     else: signals['MACD'] = {"val": f"{macd_hist:.2f}", "bias": "NEUTRAL", "col": "neutral"}
     
-    if last['Close'] > last['EMA_20'] and last['EMA_20'] > last['EMA_50']:
+    ema_gap = abs(last['EMA_20'] - last['EMA_50']) / last['EMA_50']
+    
+    if ema_gap < 0.005: # Less than 0.5% gap
+        signals['Trend'] = {"val": "Compression", "bias": "TIGHTENING (Squeeze)", "col": "neutral"}
+    elif last['Close'] > last['EMA_20'] and last['EMA_20'] > last['EMA_50']:
         signals['Trend'] = {"val": "Uptrend", "bias": "STRONG BULL", "col": "bullish"}
     elif last['Close'] < last['EMA_20'] and last['EMA_20'] < last['EMA_50']:
         signals['Trend'] = {"val": "Downtrend", "bias": "STRONG BEAR", "col": "bearish"}
-    else: signals['Trend'] = {"val": "Chop", "bias": "WEAK/MIXED", "col": "neutral"}
+    else: 
+        signals['Trend'] = {"val": "Chop", "bias": "WEAK/MIXED", "col": "neutral"}
     return signals
 
 @st.cache_data(ttl=3600)
