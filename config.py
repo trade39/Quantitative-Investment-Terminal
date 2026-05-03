@@ -1,5 +1,18 @@
 import streamlit as st
 
+# --- SYSTEM THRESHOLDS ---
+THRESHOLDS = {
+    "AI_COOLDOWN": 20,           # Seconds between Gemini calls
+    "ML_BULLISH": 0.55,          # Probability threshold for Bullish bias
+    "ML_BEARISH": 0.45,          # Probability threshold for Bearish bias
+    "HURST_TRENDING": 0.55,      # Hurst > 0.55 = Trending
+    "HURST_MEAN_REVERT": 0.45,   # Hurst < 0.45 = Mean Reverting
+    "LEVEL_PROXIMITY": 0.002,    # 0.2% price proximity for "Algo Level" highlighting
+}
+
+# --- AI ENGINE ---
+GEMINI_MODEL_NAME = "gemini-1.5-flash" # Constant to avoid rate-limiting discovery calls
+
 # --- ASSET CONFIGURATION ---
 ASSETS = {
     "Gold (Comex)": {"ticker": "GC=F", "opt_ticker": "GLD", "news_query": "Gold Price", "cg_id": None},
