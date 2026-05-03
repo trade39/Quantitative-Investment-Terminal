@@ -225,10 +225,18 @@ if not daily_data.empty:
     h_color = "#00FFFF" if hurst > config.THRESHOLDS['HURST_TRENDING'] else "#8080FF" if hurst < config.THRESHOLDS['HURST_MEAN_REVERT'] else "gray"
     
     if regime_data:
+        regime_val = regime_data['regime']
+        regime_col = regime_data['color']
+        if "COMPRESSION" in regime_val.upper():
+            regime_col = "neutral" # Force neutral color but add a custom border
+            box_style = "border: 1px solid #FFA500; background: rgba(255, 165, 0, 0.05);"
+        else:
+            box_style = ""
+            
         c3.markdown(f"""
-        <div class='terminal-box' style="padding:10px;">
+        <div class='terminal-box' style="padding:10px; {box_style}">
             <div style="font-size:0.8em; color:#00FFFF;">QUANT REGIME</div>
-            <div style="font-size:1.1em; font-weight:bold;" class='{regime_data['color']}'>{regime_data['regime']}</div>
+            <div style="font-size:1.1em; font-weight:bold;" class='{regime_col}'>{regime_val}</div>
             <div style="font-size:0.7em; display:flex; justify-content:space-between; margin-top:5px;">
                 <span>FRACTAL:</span>
                 <span style="color:{h_color}">{hurst_type}</span>
