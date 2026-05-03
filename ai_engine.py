@@ -70,7 +70,7 @@ def get_technical_narrative(ticker, price, daily_pct, regime, ml_signal, gex_dat
     1. Synthesize Technicals + Macro.
     2. Identify key trigger level.
     3. Final Execution bias ("Buy Dips", "Fade", etc).
-    Keep it concise. Bloomberg Terminal style.
+    Keep it concise. JD Capital Institutional style.
     """
     try:
         model = get_gemini_model(api_key)
