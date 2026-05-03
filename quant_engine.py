@@ -386,30 +386,39 @@ def get_market_regime(ticker):
             probs = gmm.predict_proba(X[[-1]])[0]
             means = gmm.means_
             state_order = np.argsort(means[:, 1]) 
-            regime_map = {state_order[0]: "LOW VOL (Trend)", state_order[1]: "NEUTRAL (Chop)", state_order[2]: "HIGH VOL (Crisis)"}
+            regime_map = {state_order[0]: "LOW VOL", state_order[1]: "NEUTRAL (Chop)", state_order[2]: "HIGH VOL (Crisis)"}
             
-            # Distinction between Trend and Compression
+            # Refine LOW VOL state
             regime_desc = regime_map.get(current_state, "NEUTRAL (Transitional)")
             
-            # If volatility is exceptionally low relative to history, it's Compression, not necessarily Trend
-            returns_vol = data['Returns'].std()
-            if regime_desc == "LOW VOL (Trend)" and data['Volatility'].iloc[-1] < returns_vol * 0.5:
-                 regime_desc = "COMPRESSION (Breakout Pending)"
+            # Secondary check: Is it Trending or Compressing?
+            if regime_desc == "LOW VOL":
+                returns_vol = data['Returns'].std()
+                # If vol is exceptionally low, it's a squeeze/compression
+                if data['Volatility'].iloc[-1] < returns_vol * 0.6:
+                    regime_desc = "COMPRESSION (Volatility Squeeze)"
+                else:
+                    # Check for price progress to confirm trend
+                    price_progress = abs(data['Close'].iloc[-1] - data['Close'].iloc[-20]) / data['Close'].iloc[-20]
+                    if price_progress > returns_vol * 2: # Significant progress relative to vol
+                        regime_desc = "LOW VOL (Trend)"
+                    else:
+                        regime_desc = "LOW VOL (Range-Bound)"
                  
-            color = "bullish" if "LOW VOL" in regime_desc else "bearish" if "HIGH VOL" in regime_desc else "neutral"
+            color = "bullish" if "Trend" in regime_desc or "LOW VOL" in regime_desc else "bearish" if "HIGH VOL" in regime_desc else "neutral"
             return {"regime": regime_desc, "color": color, "confidence": max(probs)}
         except:
-            # Fallback to simple ATR/Standard Dev logic if GMM fails
+            # Fallback
             current_vol = data['Volatility'].iloc[-1]
             avg_vol = data['Volatility'].mean()
             if current_vol > avg_vol * 1.5:
                 return {"regime": "HIGH VOL (Risk-Off)", "color": "bearish", "confidence": 0.7}
-            elif current_vol < avg_vol * 0.7:
-                return {"regime": "LOW VOL (Accumulation)", "color": "bullish", "confidence": 0.7}
+            elif current_vol < avg_vol * 0.6:
+                return {"regime": "COMPRESSION (Range)", "color": "neutral", "confidence": 0.7}
             else:
-                return {"regime": "STABLE (Defined Range)", "color": "neutral", "confidence": 0.6}
+                return {"regime": "STABLE (Chop)", "color": "neutral", "confidence": 0.6}
     except: 
-        return {"regime": "STABLE (Defined Range)", "color": "neutral", "confidence": 0.5}
+        return {"regime": "STABLE (Neutral)", "color": "neutral", "confidence": 0.5}
 
 @st.cache_data(ttl=86400)
 def get_macro_ml_regime(cpi_df, rate_df):
