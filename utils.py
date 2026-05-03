@@ -101,6 +101,9 @@ def md_to_rl(text, body_style, header_style):
             # Convert **bold** → <b>bold</b> and *italic* → <i>italic</i>
             line = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', line)
             line = re.sub(r'\*(.+?)\*', r'<i>\1</i>', line)
+            # Handle bullet points
+            if line.startswith('* ') or line.startswith('- '):
+                line = '• ' + line[2:]
             elements.append(Paragraph(line, body_style))
     return elements
 
@@ -158,10 +161,10 @@ def generate_pdf_report(data):
     elements.append(Paragraph("EXECUTIVE PERFORMANCE SUMMARY", header_style))
     hud_data = [
         [Paragraph("<b>METRIC</b>", body_style), Paragraph("<b>VALUE / STATUS</b>", body_style)],
-        ["ASSET TICKER", data['ticker']],
-        ["LAST PRICE", f"{data['price']:,.2f} ({data['pct']:+.2f}%)"],
-        ["AI ML SIGNAL", data['ml_signal']],
-        ["QUANT REGIME", data['regime']],
+        [Paragraph("ASSET TICKER", body_style), Paragraph(str(data['ticker']), body_style)],
+        [Paragraph("LAST PRICE", body_style), Paragraph(f"{data['price']:,.2f} ({data['pct']:+.2f}%)", body_style)],
+        [Paragraph("AI ML SIGNAL", body_style), Paragraph(str(data['ml_signal']), body_style)],
+        [Paragraph("QUANT REGIME", body_style), Paragraph(str(data['regime']), body_style)],
     ]
     t = Table(hud_data, colWidths=[2.5*inch, 3.5*inch])
     t.setStyle(TableStyle([
@@ -178,6 +181,19 @@ def generate_pdf_report(data):
     ]))
     elements.append(t)
     elements.append(Spacer(1, 20))
+
+    # --- CHART INSERTION ---
+    if data.get('chart_image'):
+        try:
+            from reportlab.platypus import Image as RLImage
+            img_data = BytesIO(data['chart_image'])
+            img = RLImage(img_data, width=6*inch, height=3*inch)
+            img.hAlign = 'CENTER'
+            elements.append(Paragraph("MARKET STRUCTURE & LIQUIDITY MAP", header_style))
+            elements.append(img)
+            elements.append(Spacer(1, 10))
+        except Exception as e:
+            elements.append(Paragraph(f"Chart unavailable: {str(e)}", body_style))
     
     # 3. AI Narrative
     if data.get('narrative'):
@@ -197,7 +213,7 @@ def generate_pdf_report(data):
         lvl = data['levels']
         lvl_data = [[Paragraph("<b>LEVEL IDENTIFIER</b>", body_style), Paragraph("<b>PRICE LEVEL</b>", body_style)]]
         for k, v in lvl.items():
-            lvl_data.append([k, f"{v:,.2f}"])
+            lvl_data.append([Paragraph(str(k), body_style), Paragraph(f"{v:,.2f}", body_style)])
             
         lt = Table(lvl_data, colWidths=[2.5*inch, 2.5*inch])
         lt.setStyle(TableStyle([
@@ -216,7 +232,26 @@ def generate_pdf_report(data):
     disclaimer = "<i>DISCLAIMER: This report is for institutional information purposes only and does not constitute financial advice. JD Capital Quantitative Investment assumes no liability for trading decisions based on this AI-generated synthesis.</i>"
     elements.append(Paragraph(disclaimer, ParagraphStyle('Disclaimer', parent=styles['Normal'], fontSize=8, color=colors.grey, alignment=1)))
 
-    doc.build(elements)
+    # Canvas callback for headers and footers
+    def my_canvas_setup(canvas, doc):
+        canvas.saveState()
+        # Footer
+        canvas.setFont('Helvetica', 8)
+        canvas.setStrokeColor(colors.grey)
+        canvas.line(0.5*inch, 0.75*inch, 7.5*inch, 0.75*inch)
+        footer_text = f"JD Capital Quantitative Investment | {data['ticker']} | Internal Brief"
+        canvas.drawString(0.5*inch, 0.5*inch, footer_text)
+        canvas.drawRightString(7.5*inch, 0.5*inch, f"Page {canvas.getPageNumber()}")
+        
+        # Header (Only on subsequent pages)
+        if canvas.getPageNumber() > 1:
+            canvas.setFont('Helvetica-Bold', 10)
+            canvas.setStrokeColor(colors.HexColor("#003366"))
+            canvas.drawString(0.5*inch, 10.5*inch, f"INSTITUTIONAL BRIEF: {data['ticker']}")
+            canvas.line(0.5*inch, 10.4*inch, 7.5*inch, 10.4*inch)
+        canvas.restoreState()
+
+    doc.build(elements, onFirstPage=my_canvas_setup, onLaterPages=my_canvas_setup)
     pdf = buffer.getvalue()
     buffer.close()
     return pdf
