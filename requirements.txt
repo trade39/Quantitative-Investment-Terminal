@@ -11,6 +11,7 @@ lxml
 pytz
 cot_reports
 google-generativeai
+google-genai
 textblob
 reportlab
 kaleido
