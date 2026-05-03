@@ -12,7 +12,7 @@ import ai_engine as ai
 from utils import generate_pdf_report
 
 # --- APP CONFIGURATION ---
-st.set_page_config(layout="wide", page_title="Bloomberg Terminal Pro V5.21", page_icon="⚡")
+st.set_page_config(layout="wide", page_title="JD Capital Quantitative Investment Terminal", page_icon="static/logo.png")
 st.markdown(config.CSS_STYLE, unsafe_allow_html=True)
 
 # --- SESSION STATE INITIALIZATION ---
@@ -28,6 +28,7 @@ if 'gemini_model_name' not in st.session_state: st.session_state['gemini_model_n
 
 # --- SIDEBAR ---
 with st.sidebar:
+    st.image("static/logo.png", use_container_width=True)
     st.markdown("<h3 style='color: #00FFFF;'>COMMAND LINE</h3>", unsafe_allow_html=True)
     selected_asset = st.selectbox("SEC / Ticker", list(config.ASSETS.keys()))
     asset_info = config.ASSETS[selected_asset]
@@ -149,7 +150,7 @@ if macro_regime: macro_context_data['regime'] = macro_regime['regime']
 # ==============================================================================
 # 2. HEAD-UP DISPLAY (HUD) - Immediate Situational Awareness
 # ==============================================================================
-st.markdown(f"<h1 style='border-bottom: 2px solid #00FFFF;'>{selected_asset} <span style='font-size:0.5em; color:#AAAAAA;'>TERMINAL PRO V5.21</span></h1>", unsafe_allow_html=True)
+st.markdown(f"<h1 style='border-bottom: 2px solid #00FFFF;'>{selected_asset} <span style='font-size:0.5em; color:#AAAAAA;'>QUANTITATIVE INVESTMENT TERMINAL</span></h1>", unsafe_allow_html=True)
 
 if not daily_data.empty:
     close, high, low = daily_data['Close'], daily_data['High'], daily_data['Low']
