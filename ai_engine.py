@@ -41,7 +41,7 @@ def get_technical_narrative(ticker, price, daily_pct, regime, ml_signal, gex_dat
     
     macro_str = "N/A"
     if macro_data:
-        macro_str = f"YieldCurve: {macro_data.get('yield_curve', 'N/A')}, Inflation(CPI): {macro_data.get('cpi', 'N/A')}%, Rates: {macro_data.get('rates', 'N/A')}%, MacroRegime: {macro_data.get('regime', 'N/A')}"
+        macro_str = f"YieldCurve: {macro_data.get('yield_curve', 'N/A')}, Inflation(CPI): {macro_data.get('cpi', 'N/A')}%, Rates: {macro_data.get('rates', 'N/A')}%, MacroRegime: {macro_data.get('regime', 'N/A')}, MacroPressureScore: {macro_data.get('macro_pressure_score', 'N/A')}/100 ({macro_data.get('macro_pressure_status', 'N/A')})"
     
     cot_str = "N/A"
     if cot_data and 'sentiment' in cot_data:
@@ -50,7 +50,8 @@ def get_technical_narrative(ticker, price, daily_pct, regime, ml_signal, gex_dat
     prompt = f"""
     You are a Senior Portfolio Manager. Analyze data for {ticker} and write a 3-bullet executive summary.
     DATA: Price: {price:,.2f} ({daily_pct:.2f}%), Regime: {regime['regime'] if regime else 'Unknown'}, 
-    ML: {ml_signal}, GEX: {gex_text}, COT: {cot_str}, Levels: {lvl_text}
+    ML: {ml_signal}, GEX: {gex_text}, COT: {cot_str}, Levels: {lvl_text},
+    MOMENTUM DETERIORATION: {macro_data.get('momentum_status', 'Stable')} (Score: {macro_data.get('momentum_score', 0)})
     MACRO CONTEXT: {macro_str}
     TASK:
     1. Synthesize Technicals + Macro.
@@ -80,7 +81,7 @@ def generate_deep_dive_thesis(ticker, price, change, regime, ml_signal, gex_data
         gex_text = f"Net Gamma: ${total_gex/1_000_000:.1f}M"
     macro_str = "N/A"
     if macro_data:
-        macro_str = f"YieldCurve: {macro_data.get('yield_curve', 'N/A')}, CPI: {macro_data.get('cpi', 'N/A')}%, Rates: {macro_data.get('rates', 'N/A')}%, Regime: {macro_data.get('regime', 'N/A')}"
+        macro_str = f"YieldCurve: {macro_data.get('yield_curve', 'N/A')}, CPI: {macro_data.get('cpi', 'N/A')}%, Rates: {macro_data.get('rates', 'N/A')}%, Regime: {macro_data.get('regime', 'N/A')}, MacroPressure: {macro_data.get('macro_pressure_score', 'N/A')}/100"
     
     cot_str = "N/A"
     if cot_data and 'sentiment' in cot_data:
