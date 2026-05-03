@@ -15,6 +15,7 @@ from utils import generate_pdf_report, parse_eco_value, analyze_eco_context, gen
 st.set_page_config(layout="wide", page_title="JD Capital Quantitative Investment Terminal", page_icon="static/logo.png")
 st.markdown(config.CSS_STYLE, unsafe_allow_html=True)
 
+
 # --- SESSION STATE INITIALIZATION ---
 if 'gemini_calls' not in st.session_state: st.session_state['gemini_calls'] = 0
 if 'news_calls' not in st.session_state: st.session_state['news_calls'] = 0
@@ -864,7 +865,7 @@ if gemini_key:
                     narrative = ai.get_technical_narrative(
                         ticker=selected_asset, price=curr, daily_pct=pct, regime=regime_data,
                         ml_signal=ml_signal, gex_data=gex_summary, cot_data=cot_data,
-                        levels=key_levels, macro_data=macro_context_data, api_key=gemini_key
+                        levels=key_levels, macro_data=macro_context_data, api_key=gemini_key, model_name=GEMINI_MODEL_NAME
                     )
                     st.session_state['narrative_cache'] = narrative
                     st.rerun()
@@ -884,7 +885,7 @@ if gemini_key:
                     thesis_text = ai.generate_deep_dive_thesis(
                         ticker=selected_asset, price=curr, change=pct, regime=regime_data,
                         ml_signal=ml_signal, gex_data=gex_summary, cot_data=cot_data,
-                        levels=key_levels, news_summary=news_text_summary, macro_data=macro_context_data, api_key=gemini_key
+                        levels=key_levels, news_summary=news_text_summary, macro_data=macro_context_data, api_key=gemini_key, model_name=GEMINI_MODEL_NAME
                     )
                     st.session_state['thesis_cache'] = thesis_text
                     st.rerun()
@@ -899,17 +900,18 @@ if gemini_key:
         # PDF EXPORT
         st.markdown("---")
         if st.session_state['narrative_cache'] or st.session_state['thesis_cache']:
-            # --- CAPTURE CHART FOR PDF ---
+            # --- CAPTURE CHART FOR PDF (Robust Fallback) ---
             chart_bytes = None
             if fig is not None:
                 try:
                     import plotly.io as pio
                     # Use a specific template for PDF export to ensure high contrast
                     pdf_fig = go.Figure(fig) # Copy the current figure
-                    pdf_fig.update_layout(template="plotly_white", paper_bgcolor="white", plot_bgcolor="white")
-                    chart_bytes = pio.to_image(pdf_fig, format="png", width=1000, height=500)
+                    pdf_fig.update_layout(template="plotly_dark", plot_bgcolor='black', paper_bgcolor='black')
+                    chart_bytes = pio.to_image(pdf_fig, format="png", engine="kaleido", width=1000, height=500)
                 except Exception as e:
-                    st.error(f"Chart capture failed: {str(e)}")
+                    st.warning(f"Chart capture failed: {str(e)[:100]}. Proceeding with text-only brief.")
+                    chart_bytes = None
 
             pdf_data = {
                 "ticker": selected_asset, "price": curr, "pct": pct,
