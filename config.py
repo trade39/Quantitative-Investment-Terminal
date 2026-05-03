@@ -11,7 +11,7 @@ THRESHOLDS = {
 }
 
 # --- AI ENGINE ---
-GEMINI_MODEL_NAME = "gemini-1.5-flash-latest" # Using -latest for better API compatibility
+GEMINI_MODEL_NAME = "gemini-2.5-flash" # Updated based on environment model list
 
 # --- ASSET CONFIGURATION ---
 ASSETS = {
