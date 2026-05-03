@@ -19,8 +19,13 @@ def get_gemini_model(api_key, model_name=None):
         m_name = model_name if model_name else config.GEMINI_MODEL_NAME
         return genai.GenerativeModel(m_name)
     except Exception as e:
-        # Hard fallback to Flash 1.5 Latest
-        return genai.GenerativeModel("gemini-1.5-flash-latest")
+        # Cascade Fallback System
+        for fallback in ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"]:
+            try:
+                return genai.GenerativeModel(fallback)
+            except:
+                continue
+        return None
 
 def get_technical_narrative(ticker, price, daily_pct, regime, ml_signal, gex_data, cot_data, levels, macro_data, api_key, model_name=None):
     if not api_key: return "AI Analyst unavailable (No Key)."
