@@ -63,7 +63,7 @@ def get_intraday_data(ticker):
     try: return safe_yf_download(ticker, period="5d", interval="15m")
     except: return pd.DataFrame()
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=60)
 def get_watchlist_data(tickers):
     """Fetches current price and 1d change for a list of tickers."""
     if not tickers: return pd.DataFrame()
