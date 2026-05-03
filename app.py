@@ -33,6 +33,12 @@ with st.sidebar:
     selected_asset = st.selectbox("SEC / Ticker", list(config.ASSETS.keys()))
     asset_info = config.ASSETS[selected_asset]
     
+    # --- ASSET CHANGE CACHE CLEARING ---
+    if st.session_state.get('last_asset') != selected_asset:
+        st.session_state['narrative_cache'] = None
+        st.session_state['thesis_cache'] = None
+        st.session_state['last_asset'] = selected_asset
+
     use_demo_data = st.checkbox("🛠️ USE DEMO DATA (Save Quota)", value=True, help="Use mock data for Calendar to save RapidAPI credits.")
     
     st.markdown("---")
@@ -152,10 +158,15 @@ if macro_regime: macro_context_data['regime'] = macro_regime['regime']
 # ==============================================================================
 st.markdown(f"<h1 style='border-bottom: 2px solid #00FFFF;'>{selected_asset} <span style='font-size:0.5em; color:#AAAAAA;'>QUANTITATIVE INVESTMENT TERMINAL</span></h1>", unsafe_allow_html=True)
 
+# Initialize HUD variables to avoid NameError if daily_data is empty
+curr = 0.0
+pct = 0.0
+ml_bias = "NEUTRAL"
+
 if not daily_data.empty:
     close, high, low = daily_data['Close'], daily_data['High'], daily_data['Low']
     curr = close.iloc[-1]
-    pct = ((curr - close.iloc[-2]) / close.iloc[-2]) * 100
+    pct = ((curr - close.iloc[-2]) / close.iloc[-2]) * 100 if len(daily_data) > 1 else 0.0
     
     # HUD Layout
     c1, c2, c3, c4 = st.columns(4)
@@ -414,103 +425,103 @@ with strat_corr_tab:
 with strat_main_tab:
     strat_col1, strat_col2 = st.columns([2, 1])
 
-with strat_col1:
-    # --- CHART: MULTILAYER LIQUIDITY MAP ---
-    if not daily_data.empty:
-        fig = go.Figure()
-        
-        # Trace 1: Candles
-        fig.add_trace(go.Candlestick(
-            x=daily_data.index, open=daily_data['Open'], high=high, low=low, close=close, name="Price",
-            increasing_line_color="#00FFFF", decreasing_line_color="#405060"
-        ))
-        
-        # Trace 2: FVG
-        for fvg in active_fvgs:
-            color = "rgba(0, 255, 255, 0.15)" if "Bullish" in fvg['type'] else "rgba(128, 128, 255, 0.15)"
-            fig.add_shape(type="rect", x0=fvg['date'], x1=daily_data.index[-1], y0=fvg['bottom'], y1=fvg['top'], fillcolor=color, line_width=0)
-
-        # Trace 3: Swing Points
-        sh_mask = ms_df['Structure'] == 'SH'
-        sl_mask = ms_df['Structure'] == 'SL'
-        fig.add_trace(go.Scatter(x=ms_df[sh_mask].index, y=ms_df[sh_mask]['High'], mode='markers', marker=dict(symbol='triangle-down', size=8, color='#8080FF'), name='Swing High'))
-        fig.add_trace(go.Scatter(x=ms_df[sl_mask].index, y=ms_df[sl_mask]['Low'], mode='markers', marker=dict(symbol='triangle-up', size=8, color='#00FFFF'), name='Swing Low'))
-
-        # SMC OVERLAYS: Order Blocks
-        if smc_data:
-            for ob in smc_data['obs']:
-                ob_color = "rgba(0, 255, 255, 0.2)" if "Bullish" in ob['type'] else "rgba(128, 128, 255, 0.2)"
-                fig.add_shape(type="rect", x0=ob['date'], x1=daily_data.index[-1], y0=ob['bottom'], y1=ob['top'], fillcolor=ob_color, line_width=0, layer="below")
-
-        # VOLUME PROFILE OVERLAYS
-        if poc_price: 
-            fig.add_hline(y=poc_price, line_dash="dash", line_color="#FFFFFF", annotation_text="POC", annotation_position="bottom right")
-        if val and vah:
-            fig.add_hrect(y0=val, y1=vah, fillcolor="rgba(255, 255, 255, 0.05)", line_width=0, layer="below")
-
-        # Trace 4: DXY Overlay
-        if not dxy_data.empty:
-            dxy_aligned = dxy_data['Close'].reindex(daily_data.index, method='ffill')
-            fig.add_trace(go.Scatter(x=dxy_aligned.index, y=dxy_aligned.values, name="DXY", line=dict(color='#8080FF', width=2), opacity=0.5, yaxis="y2"))
-
-        fig = terminal_chart_layout(fig, height=500)
-        fig.update_layout(
-            yaxis=dict(title="Price"),
-            yaxis2=dict(title="DXY", overlaying="y", side="right", showgrid=False, tickfont=dict(color="#8080FF")),
-            legend=dict(orientation="h", y=1.02, x=0, bgcolor="rgba(0,0,0,0)")
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-with strat_col2:
-    # --- MARKET STRUCTURE DETAILS ---
-    trend_color = "bullish" if "BULLISH" in ms_trend else "bearish" if "BEARISH" in ms_trend else "neutral"
-    st.markdown(f"""
-    <div class='terminal-box'>
-        <div style='color:#AAAAAA; font-size:0.8em;'>MARKET STRUCTURE (Trend)</div>
-        <div style='font-size:1.2em; font-weight:bold;'>{ms_trend}</div>
-        <hr style='margin:5px 0;'>
-        <div style='font-size:0.8em;'>Last High: <span style='color:#8080FF'>{ms_last_sh:,.2f}</span></div>
-        <div style='font-size:0.8em;'>Last Low: <span style='color:#00FFFF'>{ms_last_sl:,.2f}</span></div>
-    </div>
-    """, unsafe_allow_html=True)
+    with strat_col1:
+        # --- CHART: MULTILAYER LIQUIDITY MAP ---
+        if not daily_data.empty:
+            fig = go.Figure()
+            
+            # Trace 1: Candles
+            fig.add_trace(go.Candlestick(
+                x=daily_data.index, open=daily_data['Open'], high=high, low=low, close=close, name="Price",
+                increasing_line_color="#00FFFF", decreasing_line_color="#405060"
+            ))
+            
+            # Trace 2: FVG
+            for fvg in active_fvgs:
+                color = "rgba(0, 255, 255, 0.15)" if "Bullish" in fvg['type'] else "rgba(128, 128, 255, 0.15)"
+                fig.add_shape(type="rect", x0=fvg['date'], x1=daily_data.index[-1], y0=fvg['bottom'], y1=fvg['top'], fillcolor=color, line_width=0)
     
-    # --- MONTE CARLO ---
-    st.markdown("**🎲 PROBABILITY PATH**")
-    if pred_dates is not None and pred_paths is not None:
-        fig_pred = go.Figure()
-        fig_pred.add_trace(go.Scatter(x=pred_dates, y=np.mean(pred_paths, axis=1), name='Avg Path', line=dict(color='#00FFFF', dash='dash')))
-        fig_pred = terminal_chart_layout(fig_pred, title="MC FORECAST (126 Days)", height=200)
-        st.plotly_chart(fig_pred, use_container_width=True)
+            # Trace 3: Swing Points
+            sh_mask = ms_df['Structure'] == 'SH'
+            sl_mask = ms_df['Structure'] == 'SL'
+            fig.add_trace(go.Scatter(x=ms_df[sh_mask].index, y=ms_df[sh_mask]['High'], mode='markers', marker=dict(symbol='triangle-down', size=8, color='#8080FF'), name='Swing High'))
+            fig.add_trace(go.Scatter(x=ms_df[sl_mask].index, y=ms_df[sl_mask]['Low'], mode='markers', marker=dict(symbol='triangle-up', size=8, color='#00FFFF'), name='Swing Low'))
+    
+            # SMC OVERLAYS: Order Blocks
+            if smc_data:
+                for ob in smc_data['obs']:
+                    ob_color = "rgba(0, 255, 255, 0.2)" if "Bullish" in ob['type'] else "rgba(128, 128, 255, 0.2)"
+                    fig.add_shape(type="rect", x0=ob['date'], x1=daily_data.index[-1], y0=ob['bottom'], y1=ob['top'], fillcolor=ob_color, line_width=0, layer="below")
+    
+            # VOLUME PROFILE OVERLAYS
+            if poc_price: 
+                fig.add_hline(y=poc_price, line_dash="dash", line_color="#FFFFFF", annotation_text="POC", annotation_position="bottom right")
+            if val and vah:
+                fig.add_hrect(y0=val, y1=vah, fillcolor="rgba(255, 255, 255, 0.05)", line_width=0, layer="below")
+    
+            # Trace 4: DXY Overlay
+            if not dxy_data.empty:
+                dxy_aligned = dxy_data['Close'].reindex(daily_data.index, method='ffill')
+                fig.add_trace(go.Scatter(x=dxy_aligned.index, y=dxy_aligned.values, name="DXY", line=dict(color='#8080FF', width=2), opacity=0.5, yaxis="y2"))
+    
+            fig = terminal_chart_layout(fig, height=500)
+            fig.update_layout(
+                yaxis=dict(title="Price"),
+                yaxis2=dict(title="DXY", overlaying="y", side="right", showgrid=False, tickfont=dict(color="#8080FF")),
+                legend=dict(orientation="h", y=1.02, x=0, bgcolor="rgba(0,0,0,0)")
+            )
+            st.plotly_chart(fig, use_container_width=True)
+    
+    with strat_col2:
+        # --- MARKET STRUCTURE DETAILS ---
+        trend_color = "bullish" if "BULLISH" in ms_trend else "bearish" if "BEARISH" in ms_trend else "neutral"
+        st.markdown(f"""
+        <div class='terminal-box'>
+            <div style='color:#AAAAAA; font-size:0.8em;'>MARKET STRUCTURE (Trend)</div>
+            <div style='font-size:1.2em; font-weight:bold;'>{ms_trend}</div>
+            <hr style='margin:5px 0;'>
+            <div style='font-size:0.8em;'>Last High: <span style='color:#8080FF'>{ms_last_sh:,.2f}</span></div>
+            <div style='font-size:0.8em;'>Last Low: <span style='color:#00FFFF'>{ms_last_sl:,.2f}</span></div>
+        </div>
+        """, unsafe_allow_html=True)
         
-    # --- RESTORED: SEASONALITY TABS ---
-    if seasonality_stats:
-        st.markdown("**⏳ SEASONAL TENDENCIES**")
-        tab_hour, tab_day, tab_week = st.tabs(["HOUR (NY)", "DAY", "WEEK"])
-        
-        with tab_hour:
-            if 'hourly_perf' in seasonality_stats and seasonality_stats['hourly_perf'] is not None:
-                hp = seasonality_stats['hourly_perf']
-                fig_h = go.Figure()
-                colors = ['#00FFFF' if v > 0 else '#8080FF' for v in hp.values]
-                fig_h.add_trace(go.Bar(x=[f"{h:02d}:00" for h in hp.index], y=hp.values, marker_color=colors))
-                fig_h = terminal_chart_layout(fig_h, title="AVG RETURN BY HOUR", height=200)
-                st.plotly_chart(fig_h, use_container_width=True)
-        
-        with tab_day:
-            if 'day_high' in seasonality_stats:
-                fig_d = go.Figure()
-                fig_d.add_trace(go.Bar(x=seasonality_stats['day_high'].index, y=seasonality_stats['day_high'].values, marker_color='#00FFFF'))
-                fig_d = terminal_chart_layout(fig_d, title="PROB OF HIGH OF WEEK", height=200)
-                st.plotly_chart(fig_d, use_container_width=True)
-
-        with tab_week:
-            if 'week_returns' in seasonality_stats:
-                 wr = seasonality_stats['week_returns']
-                 fig_w = go.Figure()
-                 colors = ['#00FFFF' if v > 0 else '#8080FF' for v in wr.values]
-                 fig_w.add_trace(go.Bar(x=["Wk 1", "Wk 2", "Wk 3", "Wk 4", "Wk 5"], y=wr.values, marker_color=colors))
-                 fig_w = terminal_chart_layout(fig_w, title="MONTHLY SEASONALITY", height=200)
-                 st.plotly_chart(fig_w, use_container_width=True)
+        # --- MONTE CARLO ---
+        st.markdown("**🎲 PROBABILITY PATH**")
+        if pred_dates is not None and pred_paths is not None:
+            fig_pred = go.Figure()
+            fig_pred.add_trace(go.Scatter(x=pred_dates, y=np.mean(pred_paths, axis=1), name='Avg Path', line=dict(color='#00FFFF', dash='dash')))
+            fig_pred = terminal_chart_layout(fig_pred, title="MC FORECAST (126 Days)", height=200)
+            st.plotly_chart(fig_pred, use_container_width=True)
+            
+        # --- RESTORED: SEASONALITY TABS ---
+        if seasonality_stats:
+            st.markdown("**⏳ SEASONAL TENDENCIES**")
+            tab_hour, tab_day, tab_week = st.tabs(["HOUR (NY)", "DAY", "WEEK"])
+            
+            with tab_hour:
+                if 'hourly_perf' in seasonality_stats and seasonality_stats['hourly_perf'] is not None:
+                    hp = seasonality_stats['hourly_perf']
+                    fig_h = go.Figure()
+                    colors = ['#00FFFF' if v > 0 else '#8080FF' for v in hp.values]
+                    fig_h.add_trace(go.Bar(x=[f"{h:02d}:00" for h in hp.index], y=hp.values, marker_color=colors))
+                    fig_h = terminal_chart_layout(fig_h, title="AVG RETURN BY HOUR", height=200)
+                    st.plotly_chart(fig_h, use_container_width=True)
+            
+            with tab_day:
+                if 'day_high' in seasonality_stats:
+                    fig_d = go.Figure()
+                    fig_d.add_trace(go.Bar(x=seasonality_stats['day_high'].index, y=seasonality_stats['day_high'].values, marker_color='#00FFFF'))
+                    fig_d = terminal_chart_layout(fig_d, title="PROB OF HIGH OF WEEK", height=200)
+                    st.plotly_chart(fig_d, use_container_width=True)
+    
+            with tab_week:
+                if 'week_returns' in seasonality_stats:
+                     wr = seasonality_stats['week_returns']
+                     fig_w = go.Figure()
+                     colors = ['#00FFFF' if v > 0 else '#8080FF' for v in wr.values]
+                     fig_w.add_trace(go.Bar(x=["Wk 1", "Wk 2", "Wk 3", "Wk 4", "Wk 5"], y=wr.values, marker_color=colors))
+                     fig_w = terminal_chart_layout(fig_w, title="MONTHLY SEASONALITY", height=200)
+                     st.plotly_chart(fig_w, use_container_width=True)
 
 # --- 4B. COT & FUNDAMENTALS (RESTORED FULL DETAIL) ---
 with st.expander("🏛️ INSTITUTIONAL POSITIONING (COT) & FUNDAMENTALS", expanded=True):
