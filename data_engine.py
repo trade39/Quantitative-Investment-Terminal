@@ -4,6 +4,7 @@ import requests
 import io
 import zipfile
 from datetime import datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor
 from newsapi import NewsApiClient
 from utils import safe_yf_download, flatten_dataframe
 from config import COT_MAPPING
@@ -240,16 +241,14 @@ def fetch_cot_history(asset_name, start_year=2024):
     keywords = config['keywords']
     report_type = config['report_type']
     
-    master_df = pd.DataFrame()
     current_year = datetime.now().year
     
-    for y in range(start_year, current_year + 1):
+    def fetch_year_data(y):
         df_year = None
         if HAS_COT_LIB:
             try: df_year = cot.cot_year(year=y, cot_report_type=report_type)
             except: pass
         
-        # Fallback Direct — pick the correct CFTC zip based on report_type
         if df_year is None or df_year.empty:
             try:
                 if "disaggregated" in report_type:
@@ -258,7 +257,7 @@ def fetch_cot_history(asset_name, start_year=2024):
                     cftc_url = f"https://www.cftc.gov/files/dea/history/fut_fin_txt_{y}.zip"
                 else:
                     cftc_url = f"https://www.cftc.gov/files/dea/history/deahistfo{y}.zip"
-                r = requests.get(cftc_url, timeout=30)
+                r = requests.get(cftc_url, timeout=15) # Reduced timeout for individual threads
                 if r.status_code == 200:
                     with zipfile.ZipFile(io.BytesIO(r.content)) as z:
                         filename = z.namelist()[0]
@@ -268,8 +267,14 @@ def fetch_cot_history(asset_name, start_year=2024):
             
         if df_year is not None and not df_year.empty:
             df_year = clean_headers(df_year)
-            df_year = map_columns(df_year, report_type)
-            master_df = pd.concat([master_df, df_year])
+            return map_columns(df_year, report_type)
+        return pd.DataFrame()
+
+    # Concurrent Fetching
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        results = list(executor.map(fetch_year_data, range(start_year, current_year + 1)))
+    
+    master_df = pd.concat(results) if results else pd.DataFrame()
             
     if master_df.empty: return None
     
