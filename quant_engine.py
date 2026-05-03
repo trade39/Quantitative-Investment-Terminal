@@ -214,6 +214,123 @@ def calculate_order_flow_proxy(df):
     
     return df, bias
 
+# --- 4. ADVANCED MOMENTUM & MACRO RISK ---
+def detect_momentum_deterioration(df):
+    """
+    Identifies if momentum is fading even if price is still rising.
+    Returns a score (0-100) and a description.
+    """
+    if len(df) < 30: return 0, "Insufficient Data"
+    
+    score = 0
+    reasons = []
+    
+    # 1. RSI Divergence (Simplified)
+    # Price makes higher high, RSI makes lower high over last 20 periods
+    recent = df.tail(20)
+    p_high_1 = recent['High'].iloc[:10].max()
+    p_high_2 = recent['High'].iloc[10:].max()
+    
+    delta = df['Close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+    
+    r_high_1 = df['RSI'].tail(20).iloc[:10].max()
+    r_high_2 = df['RSI'].tail(20).iloc[10:].max()
+    
+    if p_high_2 > p_high_1 and r_high_2 < r_high_1:
+        score += 40
+        reasons.append("Bearish RSI Divergence")
+        
+    # 2. Momentum Slope (ROC of ROC)
+    df['Mom'] = df['Close'].pct_change(10)
+    mom_slope = df['Mom'].tail(5).diff().mean()
+    if df['Mom'].iloc[-1] > 0 and mom_slope < 0:
+        score += 30
+        reasons.append("Momentum Deceleration (ROC Slope < 0)")
+        
+    # 3. Volume-Price Divergence
+    vol_sma = df['Volume'].rolling(20).mean()
+    if df['Close'].iloc[-1] > df['Close'].iloc[-5] and df['Volume'].iloc[-1] < vol_sma.iloc[-1]:
+        score += 30
+        reasons.append("Volume/Price Divergence (Rising Price, Falling Volume)")
+
+    status = "STABLE"
+    if score >= 70: status = "CRITICAL DETERIORATION"
+    elif score >= 30: status = "MODERATE WEAKNESS"
+    
+    return score, status, reasons
+
+@st.cache_data(ttl=3600)
+def calculate_macro_pressure(api_key):
+    """
+    Aggregates macro-economic stress factors: Real Rates, Credit Spreads, and DXY.
+    """
+    if not api_key: return None
+    
+    try:
+        # Fetch Key Macro Stress Indicators
+        # 1. 10Y Real Interest Rate (TIPS) - Rising real rates pressure risk assets
+        real_rate_df = get_fred_series("DFII10", api_key)
+        # 2. High Yield Credit Spread - Widening spreads = financial stress
+        hy_spread_df = get_fred_series("BAMLH0A0HYM2", api_key)
+        # 3. Dollar Index Proxy
+        dxy_df = get_fred_series("DTWEXAFEGS", api_key)
+        
+        if real_rate_df.empty or hy_spread_df.empty or dxy_df.empty:
+            return None
+            
+        curr_real_rate = real_rate_df['value'].iloc[-1]
+        prev_real_rate = real_rate_df['value'].iloc[-5] # 1 week ago
+        
+        curr_hy_spread = hy_spread_df['value'].iloc[-1]
+        prev_hy_spread = hy_spread_df['value'].iloc[-5]
+        
+        curr_dxy = dxy_df['value'].iloc[-1]
+        prev_dxy = dxy_df['value'].iloc[-5]
+        
+        # Scoring logic (Higher = More Pressure)
+        pressure_score = 0
+        factors = []
+        
+        # Real Rate Pressure
+        if curr_real_rate > 2.0: 
+            pressure_score += 30
+            factors.append(f"Restrictive Real Rates ({curr_real_rate:.2f}%)")
+        elif curr_real_rate > prev_real_rate:
+            pressure_score += 15
+            factors.append("Rising Real Rates (Liquidity Tightening)")
+            
+        # Credit Stress
+        if curr_hy_spread > 4.5:
+            pressure_score += 40
+            factors.append(f"High Credit Stress (Spread: {curr_hy_spread:.2f})")
+        elif curr_hy_spread > prev_hy_spread:
+            pressure_score += 20
+            factors.append("Widening Credit Spreads (Deleveraging Risk)")
+            
+        # Dollar Pressure
+        if curr_dxy > prev_dxy:
+            pressure_score += 15
+            factors.append("Strong Dollar (USD Liquidity Drain)")
+            
+        status = "LOW"
+        if pressure_score >= 60: status = "HIGH (Institutional De-risking)"
+        elif pressure_score >= 30: status = "MODERATE (Macro Headwinds)"
+        
+        return {
+            "score": pressure_score,
+            "status": status,
+            "factors": factors,
+            "real_rate": curr_real_rate,
+            "hy_spread": curr_hy_spread,
+            "dxy": curr_dxy
+        }
+    except:
+        return None
+
 # --- RETAINING ORIGINAL FEATURES (DO NOT REMOVE) ---
 
 # --- MATH ---
