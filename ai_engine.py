@@ -58,7 +58,7 @@ def get_technical_narrative(ticker, price, daily_pct, regime, ml_signal, gex_dat
         cot_str = cot_data['sentiment']
 
     prompt = f"""
-    You are a Senior Portfolio Manager. Analyze data for {ticker} and write a 3-bullet executive summary.
+    You are a Senior Portfolio Manager. Analyze data for {ticker} and write a detailed, comprehensive executive summary.
     DATA: Price: {price:,.2f} ({daily_pct:.2f}%), Regime: {regime_val}, MarketStructure: {ms_trend},
     ML: {ml_signal}, GEX: {gex_text}, COT: {cot_str}, Levels: {lvl_text},
     MOMENTUM DETERIORATION: {macro_data.get('momentum_status', 'Stable')} (Score: {macro_data.get('momentum_score', 0)})
@@ -68,8 +68,8 @@ def get_technical_narrative(ticker, price, daily_pct, regime, ml_signal, gex_dat
     2. ACCUMULATION VS DISTRIBUTION: If in a range, identify if the structure suggests accumulation or distribution based on the provided MarketStructure bias.
     3. TRIGGER-BASED EXECUTION: Instead of a static "Neutral/Wait" bias, provide actionable trigger-based execution (e.g., "Wait for confirmed breakout above [High] or breakdown below [Low]"). Do not front-run the breakout.
     4. PRIORITIZE PRICE ACTION: Use Market Structure and Levels as the primary signal.
-    5. Identify key trigger level and final execution plan.
-    JD Capital Institutional style. Keep it concise.
+    5. INTEGRATE NEWS: Explicitly mention any relevant news or macroeconomic catalysts provided or found via search, and how they impact the execution plan.
+    JD Capital Institutional style. Elaborate deeply on the technical and macro interactions.
     DO NOT use markdown symbols like ** or ##. Use plain text.
     """
 
@@ -124,12 +124,12 @@ def generate_deep_dive_thesis(ticker, price, change, regime, ml_signal, gex_data
     MACRO: {macro_str}
     NEWS: {news_summary}
     OUTPUT FORMAT:
-    Use plain text. DO NOT use markdown characters like "##", "###", or "**".
-    1. PRICE ACTION & MARKET STRUCTURE (Primary Focus: Distinguish Trend vs Range. If RANGE, define the explicit boundaries and state if it is Accumulation or Distribution.)
-    2. INSTITUTIONAL POSITIONING & FLOW (Confirmation/Headwinds: If net signals are mixed, state 'Mixed Flow'.)
-    3. THE MACRO CROSSROADS
-    4. CORE THESIS & EXECUTION BIAS (Provide Trigger-Based Execution: 'Wait for breakout above X' rather than just 'Neutral'. Do not front-run the trigger.)
-    5. KEY LEVELS & INVALIDATION
+    Use plain text. DO NOT use markdown characters like "##", "###", or "**". Elaborate deeply on each section.
+    1. PRICE ACTION & MARKET STRUCTURE (Primary Focus: Distinguish Trend vs Range. If RANGE, define explicit boundaries and Accumulation/Distribution.)
+    2. INSTITUTIONAL POSITIONING & FLOW (Analyze how options gamma and COT positioning affect potential volatility.)
+    3. THE MACRO CROSSROADS & RECENT NEWS (Critically analyze the provided macro data AND explicitly detail how the provided recent news items or web search results are driving current sentiment.)
+    4. CORE THESIS & EXECUTION BIAS (Provide Trigger-Based Execution: 'Wait for breakout above X'. Detail the fundamental and technical rationale for this trigger.)
+    5. KEY LEVELS & INVALIDATION (Define precise levels and what price action would invalidate the thesis.)
     """
 
     if use_grounding and HAS_GENAI:
