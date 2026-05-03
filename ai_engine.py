@@ -65,7 +65,7 @@ def get_technical_narrative(ticker, price, daily_pct, regime, ml_signal, gex_dat
     MACRO CONTEXT: {macro_str}
     TASK:
     1. REGIME ADHERENCE: If Regime is 'COMPRESSION', 'RANGE-BOUND', or MarketStructure indicates 'RANGE', DO NOT label it a trend. State the explicit range boundaries if provided.
-    2. ACCUMULATION VS DISTRIBUTION: If in a range, identify if the structure suggests accumulation or distribution based on the provided MarketStructure bias.
+    2. COMPRESSION VS TREND: If in a range, identify it as 'Compression (Unresolved)'. Do not assume accumulation or distribution without a confirmed breakout.
     3. TRIGGER-BASED EXECUTION: Instead of a static "Neutral/Wait" bias, provide actionable trigger-based execution (e.g., "Wait for confirmed breakout above [High] or breakdown below [Low]"). Do not front-run the breakout.
     4. PRIORITIZE PRICE ACTION: Use Market Structure and Levels as the primary signal.
     5. INTEGRATE NEWS: Explicitly mention any relevant news or macroeconomic catalysts provided or found via search, and how they impact the execution plan.
@@ -125,7 +125,7 @@ def generate_deep_dive_thesis(ticker, price, change, regime, ml_signal, gex_data
     NEWS: {news_summary}
     OUTPUT FORMAT:
     Use plain text. DO NOT use markdown characters like "##", "###", or "**". Elaborate deeply on each section.
-    1. PRICE ACTION & MARKET STRUCTURE (Primary Focus: Distinguish Trend vs Range. If RANGE, define explicit boundaries and Accumulation/Distribution.)
+    1. PRICE ACTION & MARKET STRUCTURE (Primary Focus: Distinguish Trend vs Range. If RANGE, define explicit boundaries and refer to it as 'Compression (Unresolved)'.)
     2. INSTITUTIONAL POSITIONING & FLOW (Analyze how options gamma and COT positioning affect potential volatility.)
     3. THE MACRO CROSSROADS & RECENT NEWS (Critically analyze the provided macro data AND explicitly detail how the provided recent news items or web search results are driving current sentiment.)
     4. CORE THESIS & EXECUTION BIAS (Provide Trigger-Based Execution: 'Wait for breakout above X'. Detail the fundamental and technical rationale for this trigger.)
