@@ -64,11 +64,11 @@ def get_technical_narrative(ticker, price, daily_pct, regime, ml_signal, gex_dat
     MOMENTUM DETERIORATION: {macro_data.get('momentum_status', 'Stable')} (Score: {macro_data.get('momentum_score', 0)})
     MACRO CONTEXT: {macro_str}
     TASK:
-    1. REGIME ADHERENCE: If Regime is 'COMPRESSION', 'RANGE-BOUND', or 'CONSOLIDATION', DO NOT label it a trend. You MUST remain neutral or focused on 'range-play' unless price action is >0.5% daily.
-    2. DIRECTIONAL RIGOR: Do not assign a direction (Buy/Sell) if ML is 'NEUTRAL' AND MarketStructure is 'CONSOLIDATION'. In such cases, your bias MUST be 'Neutral/Wait'.
-    3. NO HALLUCINATION: Do not invent a 'bullish bias' just because price is slightly up (+0.1%) if the regime is range-bound.
+    1. REGIME ADHERENCE: If Regime is 'COMPRESSION', 'RANGE-BOUND', or MarketStructure indicates 'RANGE', DO NOT label it a trend. State the explicit range boundaries if provided.
+    2. ACCUMULATION VS DISTRIBUTION: If in a range, identify if the structure suggests accumulation or distribution based on the provided MarketStructure bias.
+    3. TRIGGER-BASED EXECUTION: Instead of a static "Neutral/Wait" bias, provide actionable trigger-based execution (e.g., "Wait for confirmed breakout above [High] or breakdown below [Low]"). Do not front-run the breakout.
     4. PRIORITIZE PRICE ACTION: Use Market Structure and Levels as the primary signal.
-    5. Identify key trigger level and final execution bias.
+    5. Identify key trigger level and final execution plan.
     JD Capital Institutional style. Keep it concise.
     DO NOT use markdown symbols like ** or ##. Use plain text.
     """
@@ -125,10 +125,10 @@ def generate_deep_dive_thesis(ticker, price, change, regime, ml_signal, gex_data
     NEWS: {news_summary}
     OUTPUT FORMAT:
     Use plain text. DO NOT use markdown characters like "##", "###", or "**".
-    1. PRICE ACTION & MARKET STRUCTURE (Primary Focus: Distinguish between Trend vs Range. If MarketStructure is CONSOLIDATION, highlight the lack of trend.)
+    1. PRICE ACTION & MARKET STRUCTURE (Primary Focus: Distinguish Trend vs Range. If RANGE, define the explicit boundaries and state if it is Accumulation or Distribution.)
     2. INSTITUTIONAL POSITIONING & FLOW (Confirmation/Headwinds: If net signals are mixed, state 'Mixed Flow'.)
     3. THE MACRO CROSSROADS
-    4. CORE THESIS & EXECUTION BIAS (Strict adherence to data: If MarketStructure=CONSOLIDATION and ML=NEUTRAL, bias MUST be NEUTRAL.)
+    4. CORE THESIS & EXECUTION BIAS (Provide Trigger-Based Execution: 'Wait for breakout above X' rather than just 'Neutral'. Do not front-run the trigger.)
     5. KEY LEVELS & INVALIDATION
     """
 
