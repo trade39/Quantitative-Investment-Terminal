@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import google.generativeai as genai
+import config
 
 # --- SAFE IMPORT SYSTEM ---
 try:
@@ -11,35 +12,14 @@ except ImportError:
 
 def get_gemini_model(api_key):
     """
-    Helper to get the best available model with caching in session state.
-    Reduces API calls (list_models) to prevent hitting Free Tier limits.
+    Helper to get the model using the constant from config.py.
     """
-    if 'gemini_model_name' in st.session_state and st.session_state['gemini_model_name']:
-        return genai.GenerativeModel(st.session_state['gemini_model_name'])
-        
     try:
         genai.configure(api_key=api_key)
-        # Default fallback to Gemini 1.5 Flash (Most compatible for Free Tier)
-        preferred_model = "models/gemini-1.5-flash"
-        
-        # Verify if model is available, otherwise discovery
-        models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-        
-        if preferred_model in models:
-            st.session_state['gemini_model_name'] = preferred_model
-        elif models:
-            # Sort to pick flash models first if preferred not found
-            models.sort(key=lambda x: 'flash' not in x.lower())
-            st.session_state['gemini_model_name'] = models[0]
-        else:
-            return None
-            
-        return genai.GenerativeModel(st.session_state['gemini_model_name'])
+        return genai.GenerativeModel(config.GEMINI_MODEL_NAME)
     except Exception as e:
-        if "429" in str(e):
-            st.error("⚠️ Gemini discovery failed: Rate limit exceeded. Using fallback.")
-            return genai.GenerativeModel("gemini-1.5-flash") # Hard fallback
-        return None
+        # Hard fallback to Flash 1.5 if config or config name fails
+        return genai.GenerativeModel("gemini-1.5-flash")
 
 def get_technical_narrative(ticker, price, daily_pct, regime, ml_signal, gex_data, cot_data, levels, macro_data, api_key):
     if not api_key: return "AI Analyst unavailable (No Key)."
@@ -70,7 +50,8 @@ def get_technical_narrative(ticker, price, daily_pct, regime, ml_signal, gex_dat
     1. Synthesize Technicals + Macro.
     2. Identify key trigger level.
     3. Final Execution bias ("Buy Dips", "Fade", etc).
-    Keep it concise. JD Capital Institutional style.
+    Keep it concise. JD Capital Institutional style. 
+    DO NOT use markdown symbols like ** or ##. Use plain text.
     """
     try:
         model = get_gemini_model(api_key)
@@ -104,11 +85,13 @@ def generate_deep_dive_thesis(ticker, price, change, regime, ml_signal, gex_data
     ML: {ml_signal}, GEX: {gex_text}, COT: {cot_str}
     MACRO: {macro_str}
     NEWS: {news_summary}
-    OUTPUT FORMAT (Markdown):
-    ### 1. THE MACRO & TECHNICAL CROSSROADS
-    ### 2. CORE ARGUMENT (Long/Short/Neutral)
-    ### 3. THE BEAR/BULL CASE (Risks)
-    ### 4. KEY LEVELS (Invalidation)
+    OUTPUT FORMAT:
+    Use plain text. DO NOT use markdown characters like "##", "###", or "**" for bolding. 
+    Use clear section titles without hashes.
+    1. THE MACRO & TECHNICAL CROSSROADS
+    2. CORE ARGUMENT (Long/Short/Neutral)
+    3. THE BEAR/BULL CASE (Risks)
+    4. KEY LEVELS (Invalidation)
     """
     try:
         model = get_gemini_model(api_key)
@@ -126,7 +109,9 @@ def calculate_news_sentiment(news_items):
     scores = []
     for news in news_items:
         try:
-            blob = TextBlob(f"{news['title']} {news['title']}") 
+            # FIX: Use title + description instead of repeating title (which doubles polarity artificially)
+            text_to_analyze = f"{news['title']} {news.get('description', '')}"
+            blob = TextBlob(text_to_analyze) 
             score = blob.sentiment.polarity
             scores.append({
                 "title": news['title'],
