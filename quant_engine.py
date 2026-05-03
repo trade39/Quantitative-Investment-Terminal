@@ -101,15 +101,16 @@ def detect_market_structure(df, window=5):
             if range_height > 0:
                 pos_in_range = (current_close - active_sl) / range_height
                 
-                # Replace accumulation/distribution with 'Compression (Unresolved)'
-                bias = "Compression (Unresolved)"
-                if pos_in_range > 0.7:
-                    bias = "Compression (Testing Highs, Unresolved)"
-                elif pos_in_range < 0.3:
-                    bias = "Compression (Testing Lows, Unresolved)"
+                # Define strict zones to remove implicit bias
+                if pos_in_range >= 0.6:
+                    bias = "Compression (Upper Boundary Test, Unresolved)"
+                elif pos_in_range <= 0.4:
+                    bias = "Compression (Lower Boundary Test, Unresolved)"
+                else:
+                    bias = "NO-TRADE CHOP ZONE (Mid-Range)"
                     
-                # Add explicit trigger-based execution logic
-                trigger_logic = f"| TRIGGERS: Long > {active_sh:,.2f}, Short < {active_sl:,.2f}"
+                # Add explicit trigger-based execution logic with acceptance criteria
+                trigger_logic = f"| TRIGGERS: Long > {active_sh:,.2f}, Short < {active_sl:,.2f} (Criteria: Daily Close + Vol Confirmation)"
                 trend = f"RANGE [{active_sl:,.2f} - {active_sh:,.2f}] ({bias}) {trigger_logic}"
             else:
                 trend = "CONSOLIDATION (Internal Range)"
