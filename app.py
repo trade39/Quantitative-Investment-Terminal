@@ -123,46 +123,54 @@ radar_signals = qe.calculate_technical_radar(daily_data)
 if 'last_analyzed_asset' not in st.session_state: st.session_state['last_analyzed_asset'] = selected_asset
 show_regen_warning = st.session_state['last_analyzed_asset'] != selected_asset
 
-# Advanced Engines
-_, ml_prob = qe.get_ml_prediction(asset_info['ticker'])
-gex_df, gex_date, gex_spot, current_iv = qe.get_gex_profile(asset_info['opt_ticker'])
-vol_profile, poc_price = qe.calculate_volume_profile(intraday_data)
-hurst = qe.calculate_hurst(daily_data['Close'].values) if not daily_data.empty else 0.5
-regime_data = qe.get_market_regime(asset_info['ticker'])
-correlations = qe.get_correlations(asset_info['ticker'], fred_key)
-news_sentiment_df = ai.calculate_news_sentiment(combined_news_for_llm)
-macro_regime = qe.get_macro_ml_regime(df_cpi, df_ff) if fred_key else None
+# --- INITIALIZE GLOBAL VARIABLES (to avoid NameError with lazy loading) ---
+intraday_data = pd.DataFrame()
+vol_profile = None
+poc_price = 0
+vwap_df = pd.DataFrame()
+rs_data = pd.DataFrame()
+corr_matrix = pd.DataFrame()
+ms_df = pd.DataFrame()
+ms_trend = "N/A"
+active_fvgs = []
+smc_data = {"obs": [], "sweeps": []}
+vol_cone = {}
+of_bias = "N/A"
+cot_history = pd.DataFrame()
+cot_data = None
+gex_df = None
+current_iv = 0
+recession_prob = 0
+yc_regime = "N/A"
+yc_color = "neutral"
+yc_impact = "N/A"
+news_sentiment_df = pd.DataFrame()
+df_cpi = pd.DataFrame()
+df_ff = pd.DataFrame()
+df_m2 = pd.DataFrame()
+macro_regime = None
+pred_dates, pred_paths = None, None
+seasonality_stats = None
+cot_history = pd.DataFrame()
 
-# Multilayer Technicals
-ms_df, ms_trend, ms_last_sh, ms_last_sl = qe.detect_market_structure(daily_data)
-vol_cone = qe.get_volatility_cone(daily_data)
-of_df, of_bias = qe.calculate_order_flow_proxy(daily_data)
-active_fvgs = qe.detect_fair_value_gaps(daily_data)
-rs_data = qe.get_relative_strength(asset_info['ticker'])
-key_levels = qe.get_key_levels(daily_data)
-vwap_df = qe.calculate_vwap_bands(intraday_data)
-pred_dates, pred_paths = qe.generate_monte_carlo(daily_data)
-seasonality_stats = qe.get_seasonality_stats(daily_data, asset_info['ticker']) 
-
-# Recession & Correlation (Initial check)
+# FRED Base Data (Used in HUD and AI Context)
 df_yield_3m = de.get_fred_series("T10Y3M", fred_key)
-recession_prob = qe.calculate_recession_probability(df_yield_3m['value'].iloc[-1]) if not df_yield_3m.empty else 0
 df_yield = de.get_fred_series("T10Y2Y", fred_key)
-yc_regime, yc_color = qe.get_yield_curve_regime(df_yield['value'].iloc[-1] if not df_yield.empty else None, df_yield_3m['value'].iloc[-1] if not df_yield_3m.empty else None)
-yc_impact = qe.get_regime_impact(yc_regime, asset_info['ticker'])
+df_ff = de.get_fred_series("FEDFUNDS", fred_key)
+df_cpi = de.get_fred_series("CPIAUCSL", fred_key)
 
-# advanced logic
-smc_data = qe.detect_smc_patterns(daily_data)
-val, vah = qe.calculate_value_area(vol_profile)
-
-# Initialize COT Data for AI
-cot_data = None 
-macro_context_data = {}
+if not df_yield_3m.empty:
+    recession_prob = qe.calculate_recession_probability(df_yield_3m['value'].iloc[-1])
+    yc_regime, yc_color = qe.get_yield_curve_regime(df_yield['value'].iloc[-1] if not df_yield.empty else None, df_yield_3m['value'].iloc[-1])
+    yc_impact = qe.get_regime_impact(yc_regime, asset_info['ticker'])
 
 # Populate Macro Context for AI
-if not df_yield.empty: macro_context_data['yield_curve'] = f"{df_yield['value'].iloc[-1]:.2f}"
-if not df_cpi.empty: macro_context_data['cpi'] = f"{(df_cpi['value'].pct_change(12).iloc[-1]*100):.2f}"
-if not df_ff.empty: macro_context_data['rates'] = f"{df_ff['value'].iloc[-1]:.2f}"
+macro_context_data = {}
+if not df_yield.empty: macro_context_data['yield_curve'] = f"{df_yield['value'].iloc[-1]:.2f}%"
+if not df_cpi.empty: 
+    try: macro_context_data['cpi'] = f"{(df_cpi['value'].pct_change(12).iloc[-1]*100):.2f}%"
+    except: pass
+if not df_ff.empty: macro_context_data['rates'] = f"{df_ff['value'].iloc[-1]:.2f}%"
 if macro_regime: macro_context_data['regime'] = macro_regime['regime']
 
 # ==============================================================================
