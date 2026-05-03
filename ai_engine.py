@@ -1,33 +1,40 @@
 import streamlit as st
 import pandas as pd
-import google.generativeai as genai
+import os
 import config
 
-# --- SAFE IMPORT SYSTEM ---
+# --- GOOGLE GENAI SDK (NEW) ---
+try:
+    from google import genai
+    from google.genai import types
+    HAS_GENAI = True
+except ImportError:
+    HAS_GENAI = False
+
+# --- OLD GOOGLE GENERATIVEAI SDK (FALLBACK) ---
+try:
+    import google.generativeai as old_genai
+    HAS_OLD_GENAI = True
+except ImportError:
+    HAS_OLD_GENAI = False
+
+# --- NLP SAFE IMPORT ---
 try:
     from textblob import TextBlob
     HAS_NLP = True
 except ImportError:
     HAS_NLP = False
 
-def get_gemini_model(api_key, model_name=None):
-    """
-    Helper to get the model using the constant from config.py or an override.
-    """
+def get_genai_client(api_key):
+    """Initializes the new google-genai client."""
+    if not HAS_GENAI: return None
     try:
-        genai.configure(api_key=api_key)
-        m_name = model_name if model_name else config.GEMINI_MODEL_NAME
-        return genai.GenerativeModel(m_name)
+        return genai.Client(api_key=api_key)
     except Exception as e:
-        # Cascade Fallback System
-        for fallback in ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"]:
-            try:
-                return genai.GenerativeModel(fallback)
-            except:
-                continue
+        print(f"GenAI Client Init Error: {e}")
         return None
 
-def get_technical_narrative(ticker, price, daily_pct, regime, ml_signal, gex_data, cot_data, levels, macro_data, api_key, model_name=None):
+def get_technical_narrative(ticker, price, daily_pct, regime, ml_signal, gex_data, cot_data, levels, macro_data, api_key, model_name=None, use_grounding=False):
     if not api_key: return "AI Analyst unavailable (No Key)."
     if 'gemini_calls' in st.session_state: st.session_state['gemini_calls'] += 1
     
@@ -62,21 +69,36 @@ def get_technical_narrative(ticker, price, daily_pct, regime, ml_signal, gex_dat
     JD Capital Institutional style. Keep it concise.
     DO NOT use markdown symbols like ** or ##. Use plain text.
     """
-    try:
-        model = get_gemini_model(api_key, model_name)
-        if not model: return "Error: No valid models found. Check API Key."
-            
-        response = model.generate_content(prompt)
-        return response.text
-    except Exception as e:
-        if "429" in str(e): return "⚠️ QUOTA EXCEEDED (Free Tier: 5 RPM). Please wait 60s."
-        return f"AI Analyst unavailable: {str(e)}"
 
-def generate_deep_dive_thesis(ticker, price, change, regime, ml_signal, gex_data, cot_data, levels, news_summary, macro_data, api_key, model_name=None):
+    if use_grounding and HAS_GENAI:
+        return get_grounded_response(prompt, api_key, model_name)
+    
+    # Fallback to new SDK (no grounding) if available
+    if HAS_GENAI:
+        try:
+            client = get_genai_client(api_key)
+            m_name = model_name if model_name else config.GEMINI_MODEL_NAME
+            response = client.models.generate_content(model=m_name, contents=prompt)
+            return response.text
+        except: pass
+
+    # Ultimate fallback to old SDK
+    if HAS_OLD_GENAI:
+        try:
+            m_name = model_name if model_name else config.GEMINI_MODEL_NAME
+            old_genai.configure(api_key=api_key)
+            model = old_genai.GenerativeModel(m_name)
+            response = model.generate_content(prompt)
+            return response.text
+        except Exception as e:
+            return f"AI Analyst Error: {str(e)}"
+    
+    return "AI Analyst Error: No compatible SDK found."
+
+def generate_deep_dive_thesis(ticker, price, change, regime, ml_signal, gex_data, cot_data, levels, news_summary, macro_data, api_key, model_name=None, use_grounding=False):
     if not api_key: return "Deep Dive unavailable (No Key)."
     if 'gemini_calls' in st.session_state: st.session_state['gemini_calls'] += 1
     
-    model = get_gemini_model(api_key, model_name)
     gex_text = "N/A"
     if gex_data is not None:
         total_gex = gex_data['gex'].sum()
@@ -103,15 +125,74 @@ def generate_deep_dive_thesis(ticker, price, change, regime, ml_signal, gex_data
     4. CORE THESIS & EXECUTION BIAS
     5. KEY LEVELS & INVALIDATION
     """
+
+    if use_grounding and HAS_GENAI:
+        return get_grounded_response(prompt, api_key, model_name)
+
+    # Fallback to new SDK (no grounding) if available
+    if HAS_GENAI:
+        try:
+            client = get_genai_client(api_key)
+            m_name = model_name if model_name else config.GEMINI_MODEL_NAME
+            response = client.models.generate_content(model=m_name, contents=prompt)
+            return response.text
+        except: pass
+
+    # Ultimate fallback to old SDK
+    if HAS_OLD_GENAI:
+        try:
+            m_name = model_name if model_name else config.GEMINI_MODEL_NAME
+            old_genai.configure(api_key=api_key)
+            model = old_genai.GenerativeModel(m_name)
+            response = model.generate_content(prompt)
+            return response.text
+        except Exception as e:
+            return f"Thesis Generation Failed: {str(e)}"
+            
+    return "Thesis Generation Failed: No compatible SDK found."
+
+def get_grounded_response(prompt, api_key, model_name=None):
+    """Core function to handle Google Search Grounding using the new GenAI SDK."""
+    if not HAS_GENAI: return "Search Grounding Error: google-genai SDK not installed."
+    
+    client = get_genai_client(api_key)
+    if not client: return "Search Grounding Error: Client initialization failed."
+
+    m_name = model_name if model_name else config.GEMINI_MODEL_NAME
+    
+    # Configuration to enable Google Search grounding
+    config_genai = types.GenerateContentConfig(
+        tools=[types.Tool(google_search=types.GoogleSearch())],
+        temperature=1.0
+    )
+
     try:
-        model = get_gemini_model(api_key)
-        if not model: return "Error: No valid models found."
+        response = client.models.generate_content(
+            model=m_name,
+            contents=prompt,
+            config=config_genai
+        )
         
-        response = model.generate_content(prompt)
-        return response.text
+        full_text = response.text
+        
+        # Add citations if available
+        if response.candidates and response.candidates[0].grounding_metadata:
+            metadata = response.candidates[0].grounding_metadata
+            citations = "\n\n--- GROUNDING SOURCES ---\n"
+            
+            if hasattr(metadata, 'web_search_queries') and metadata.web_search_queries:
+                citations += f"Search Queries: {', '.join(metadata.web_search_queries)}\n"
+
+            if hasattr(metadata, 'grounding_chunks') and metadata.grounding_chunks:
+                for i, chunk in enumerate(metadata.grounding_chunks):
+                    if hasattr(chunk, 'web') and chunk.web:
+                        citations += f"[{i+1}] {chunk.web.title}: {chunk.web.uri}\n"
+                
+                full_text += citations
+                
+        return full_text
     except Exception as e:
-        if "429" in str(e): return "⚠️ QUOTA EXCEEDED (Free Tier: 5 RPM). Please wait 60s."
-        return f"Thesis Generation Failed: {str(e)}"
+        return f"Grounding API Error: {str(e)}"
 
 def calculate_news_sentiment(news_items):
     if not HAS_NLP or not news_items: return pd.DataFrame()
@@ -119,7 +200,6 @@ def calculate_news_sentiment(news_items):
     scores = []
     for news in news_items:
         try:
-            # FIX: Use title + description instead of repeating title (which doubles polarity artificially)
             text_to_analyze = f"{news['title']} {news.get('description', '')}"
             blob = TextBlob(text_to_analyze) 
             score = blob.sentiment.polarity
