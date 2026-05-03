@@ -255,3 +255,41 @@ def generate_pdf_report(data):
     pdf = buffer.getvalue()
     buffer.close()
     return pdf
+
+# --- UI HELPERS (Moved from app.py) ---
+def parse_eco_value(val_str):
+    if not isinstance(val_str, str) or val_str == '': return None
+    clean = val_str.replace('%', '').replace(',', '')
+    multiplier = 1.0
+    if 'K' in clean.upper(): multiplier = 1000.0; clean = clean.upper().replace('K', '')
+    elif 'M' in clean.upper(): multiplier = 1000000.0; clean = clean.upper().replace('M', '')
+    elif 'B' in clean.upper(): multiplier = 1000000000.0; clean = clean.upper().replace('B', '')
+    try: return float(clean) * multiplier
+    except: return None
+
+def analyze_eco_context(actual_str, forecast_str, previous_str):
+    is_happened = actual_str is not None and actual_str != ""
+    val_actual = parse_eco_value(actual_str)
+    val_forecast = parse_eco_value(forecast_str)
+    val_prev = parse_eco_value(previous_str)
+    context_str = ""
+    bias = "Neutral"
+    if is_happened:
+        if val_actual is not None and val_forecast is not None:
+            context_str = f"Act {actual_str} / Est {forecast_str}"
+            delta = val_actual - val_forecast
+            if delta > 0: bias = "Bullish"
+            else: bias = "Bearish"
+        else: context_str = f"Actual: {actual_str}"
+    else:
+         context_str = f"Est {forecast_str}" if forecast_str else "Waiting..."
+    return context_str, bias
+
+def generate_cot_analysis(spec_net, hedge_net, spec_label, hedge_label):
+    spec_sent = "🟢 BULLISH" if spec_net > 0 else "🔴 BEARISH"
+    hedge_sent = "🟢 BULLISH" if hedge_net > 0 else "🔴 BEARISH"
+    if (spec_net > 0 and hedge_net < 0) or (spec_net < 0 and hedge_net > 0):
+        structure = "✅ **Healthy Structure:** Risk Transfer active."
+    else:
+        structure = "⚠️ **Anomaly:** Groups positioned same side."
+    return f"* **{spec_label}:** {spec_sent} (Net: {int(spec_net):,})\n* **{hedge_label}:** {hedge_sent}\n{structure}"
