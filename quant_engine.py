@@ -82,33 +82,39 @@ def detect_market_structure(df, window=5):
         last_sh = df[df['Swing_High']]['High'].iloc[-1]
         last_sl = df[df['Swing_Low']]['Low'].iloc[-1]
         
+        # Narrow the active range to recent price action (last 20 periods) if macro swings are too wide
+        recent_df = df.tail(20)
+        recent_high = recent_df['High'].max()
+        recent_low = recent_df['Low'].min()
+        
+        active_sh = recent_high if recent_high < last_sh else last_sh
+        active_sl = recent_low if recent_low > last_sl else last_sl
+        
         trend = "NEUTRAL"
-        if current_close > last_sh: 
+        if current_close > active_sh: 
             trend = "BULLISH (BOS)"
-        elif current_close < last_sl: 
+        elif current_close < active_sl: 
             trend = "BEARISH (BOS)"
         else: 
-            # In an internal range, check Accumulation vs Distribution
-            range_height = last_sh - last_sl
+            # In an internal range, check for compression
+            range_height = active_sh - active_sl
             if range_height > 0:
-                pos_in_range = (current_close - last_sl) / range_height
+                pos_in_range = (current_close - active_sl) / range_height
                 
-                # Use recent volume trend to confirm bias
-                recent_vol = df['Volume'].tail(5).mean()
-                avg_vol = df['Volume'].tail(20).mean()
-                vol_increasing = recent_vol > avg_vol
-                
-                bias = "Neutral Chop"
-                if pos_in_range > 0.6 and vol_increasing:
-                    bias = "Accumulation (Testing Highs)"
-                elif pos_in_range < 0.4 and vol_increasing:
-                    bias = "Distribution (Testing Lows)"
+                # Replace accumulation/distribution with 'Compression (Unresolved)'
+                bias = "Compression (Unresolved)"
+                if pos_in_range > 0.7:
+                    bias = "Compression (Testing Highs, Unresolved)"
+                elif pos_in_range < 0.3:
+                    bias = "Compression (Testing Lows, Unresolved)"
                     
-                trend = f"RANGE [{last_sl:,.2f} - {last_sh:,.2f}] ({bias})"
+                # Add explicit trigger-based execution logic
+                trigger_logic = f"| TRIGGERS: Long > {active_sh:,.2f}, Short < {active_sl:,.2f}"
+                trend = f"RANGE [{active_sl:,.2f} - {active_sh:,.2f}] ({bias}) {trigger_logic}"
             else:
                 trend = "CONSOLIDATION (Internal Range)"
         
-        return df, trend, last_sh, last_sl
+        return df, trend, active_sh, active_sl
     except:
         return df, "UNCERTAIN", 0, 0
 
