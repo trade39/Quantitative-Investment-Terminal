@@ -13,3 +13,4 @@ cot_reports
 google-generativeai
 textblob
 reportlab
+kaleido
