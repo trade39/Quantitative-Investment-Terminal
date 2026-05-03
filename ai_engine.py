@@ -10,18 +10,19 @@ try:
 except ImportError:
     HAS_NLP = False
 
-def get_gemini_model(api_key):
+def get_gemini_model(api_key, model_name=None):
     """
-    Helper to get the model using the constant from config.py.
+    Helper to get the model using the constant from config.py or an override.
     """
     try:
         genai.configure(api_key=api_key)
-        return genai.GenerativeModel(config.GEMINI_MODEL_NAME)
+        m_name = model_name if model_name else config.GEMINI_MODEL_NAME
+        return genai.GenerativeModel(m_name)
     except Exception as e:
-        # Hard fallback to Flash 1.5 if config or config name fails
-        return genai.GenerativeModel("gemini-1.5-flash")
+        # Hard fallback to Flash 1.5 Latest
+        return genai.GenerativeModel("gemini-1.5-flash-latest")
 
-def get_technical_narrative(ticker, price, daily_pct, regime, ml_signal, gex_data, cot_data, levels, macro_data, api_key):
+def get_technical_narrative(ticker, price, daily_pct, regime, ml_signal, gex_data, cot_data, levels, macro_data, api_key, model_name=None):
     if not api_key: return "AI Analyst unavailable (No Key)."
     if 'gemini_calls' in st.session_state: st.session_state['gemini_calls'] += 1
     
@@ -54,7 +55,7 @@ def get_technical_narrative(ticker, price, daily_pct, regime, ml_signal, gex_dat
     DO NOT use markdown symbols like ** or ##. Use plain text.
     """
     try:
-        model = get_gemini_model(api_key)
+        model = get_gemini_model(api_key, model_name)
         if not model: return "Error: No valid models found. Check API Key."
             
         response = model.generate_content(prompt)
@@ -63,10 +64,11 @@ def get_technical_narrative(ticker, price, daily_pct, regime, ml_signal, gex_dat
         if "429" in str(e): return "⚠️ QUOTA EXCEEDED (Free Tier: 5 RPM). Please wait 60s."
         return f"AI Analyst unavailable: {str(e)}"
 
-def generate_deep_dive_thesis(ticker, price, change, regime, ml_signal, gex_data, cot_data, levels, news_summary, macro_data, api_key):
-    if not api_key: return "API Key Missing."
+def generate_deep_dive_thesis(ticker, price, change, regime, ml_signal, gex_data, cot_data, levels, news_summary, macro_data, api_key, model_name=None):
+    if not api_key: return "Deep Dive unavailable (No Key)."
     if 'gemini_calls' in st.session_state: st.session_state['gemini_calls'] += 1
     
+    model = get_gemini_model(api_key, model_name)
     gex_text = "N/A"
     if gex_data is not None:
         total_gex = gex_data['gex'].sum()
