@@ -162,6 +162,7 @@ st.markdown(f"<h1 style='border-bottom: 2px solid #00FFFF;'>{selected_asset} <sp
 curr = 0.0
 pct = 0.0
 ml_bias = "NEUTRAL"
+fig = None
 
 if not daily_data.empty:
     close, high, low = daily_data['Close'], daily_data['High'], daily_data['Low']
@@ -806,12 +807,25 @@ if gemini_key:
         # PDF EXPORT
         st.markdown("---")
         if st.session_state['narrative_cache'] or st.session_state['thesis_cache']:
+            # --- CAPTURE CHART FOR PDF ---
+            chart_bytes = None
+            if fig is not None:
+                try:
+                    import plotly.io as pio
+                    # Use a specific template for PDF export to ensure high contrast
+                    pdf_fig = go.Figure(fig) # Copy the current figure
+                    pdf_fig.update_layout(template="plotly_white", paper_bgcolor="white", plot_bgcolor="white")
+                    chart_bytes = pio.to_image(pdf_fig, format="png", width=1000, height=500)
+                except Exception as e:
+                    st.error(f"Chart capture failed: {str(e)}")
+
             pdf_data = {
                 "ticker": selected_asset, "price": curr, "pct": pct,
                 "ml_signal": ml_bias, "regime": regime_data['regime'] if regime_data else "N/A",
                 "narrative": st.session_state['narrative_cache'],
                 "thesis": st.session_state['thesis_cache'],
-                "levels": key_levels
+                "levels": key_levels,
+                "chart_image": chart_bytes
             }
             pdf_bytes = generate_pdf_report(pdf_data)
             st.download_button(
