@@ -4,6 +4,13 @@ import pandas as pd
 import time
 import os
 import plotly.graph_objects as go
+import re
+from io import BytesIO
+from reportlab.lib.pagesizes import LETTER
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, HRFlowable
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
+from reportlab.lib.units import inch
 
 def get_api_key(key_name):
     """Securely retrieve API keys from secrets or environment variables."""
@@ -76,18 +83,49 @@ def terminal_chart_layout(fig, title="", height=350):
     )
     return fig
 
+def md_to_rl(text, body_style, header_style):
+    """Converts basic markdown to a list of ReportLab Paragraph flowables."""
+    elements = []
+    if not text: return elements
+    for line in text.split('\n'):
+        line = line.strip()
+        if not line:
+            elements.append(Spacer(1, 6))
+            continue
+        # Strip heading markers and apply header style
+        if line.startswith('### '):
+            elements.append(Paragraph(line[4:], header_style))
+        elif line.startswith('## '):
+            elements.append(Paragraph(line[3:], header_style))
+        else:
+            # Convert **bold** → <b>bold</b> and *italic* → <i>italic</i>
+            line = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', line)
+            line = re.sub(r'\*(.+?)\*', r'<i>\1</i>', line)
+            elements.append(Paragraph(line, body_style))
+    return elements
+
+def clean_markdown(text):
+    """
+    Cleans markdown characters and converts common ones to ReportLab-friendly XML tags.
+    """
+    if not text: return ""
+    import re
+    # 1. Convert bold **text** to <b>text</b>
+    text = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', text)
+    # 2. Convert italic *text* to <i>text</i>
+    text = re.sub(r'\*(.*?)\*', r'<i>\1</i>', text)
+    # 3. Remove header markers ###, ##, #
+    text = re.sub(r'#+\s*(.*?)\n', r'<b>\1</b><br/>', text)
+    text = re.sub(r'#+\s*(.*)', r'<b>\1</b>', text)
+    # 4. Clean up any remaining stray characters (like single * for bullets)
+    text = text.replace('* ', '• ')
+    return text
+
 def generate_pdf_report(data):
     """
     Generates a professional Institutional Brief PDF.
     data: dict containing 'ticker', 'price', 'pct', 'narrative', 'thesis', 'levels', 'ml_signal', 'regime'
     """
-    from io import BytesIO
-    from reportlab.lib.pagesizes import LETTER
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, HRFlowable
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib import colors
-    from reportlab.lib.units import inch
-
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=LETTER, rightMargin=50, leftMargin=50, topMargin=50, bottomMargin=50)
     styles = getSampleStyleSheet()
@@ -97,7 +135,6 @@ def generate_pdf_report(data):
     subtitle_style = ParagraphStyle('SubtitleStyle', parent=styles['Normal'], color=colors.HexColor("#666666"), alignment=1, spaceAfter=20, fontName='Helvetica-Oblique', fontSize=10)
     header_style = ParagraphStyle('HeaderStyle', parent=styles['Heading2'], color=colors.HexColor("#003366"), spaceBefore=15, spaceAfter=10, fontName='Helvetica-Bold', fontSize=12, borderPadding=5)
     body_style = ParagraphStyle('BodyStyle', parent=styles['Normal'], fontName='Helvetica', fontSize=10, leading=14, alignment=4) # Justified
-    body_style_bold = ParagraphStyle('BodyBold', parent=body_style, fontName='Helvetica-Bold')
     
     elements = []
     
@@ -145,17 +182,14 @@ def generate_pdf_report(data):
     # 3. AI Narrative
     if data.get('narrative'):
         elements.append(Paragraph("TECHNICAL NARRATIVE & ANALYSIS", header_style))
-        # Use simple formatting for the narrative
-        narrative_text = data['narrative'].replace("\n", "<br/>")
-        elements.append(Paragraph(narrative_text, body_style))
-        elements.append(Spacer(1, 20))
+        elements.extend(md_to_rl(data['narrative'], body_style, header_style))
+        elements.append(Spacer(1, 10))
         
     # 4. Deep Thesis
     if data.get('thesis'):
         elements.append(Paragraph("INVESTMENT THESIS", header_style))
-        thesis_text = data['thesis'].replace("\n", "<br/>")
-        elements.append(Paragraph(thesis_text, body_style))
-        elements.append(Spacer(1, 20))
+        elements.extend(md_to_rl(data['thesis'], body_style, header_style))
+        elements.append(Spacer(1, 10))
         
     # 5. Key Algo Levels
     if data.get('levels'):
