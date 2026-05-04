@@ -190,8 +190,11 @@ if macro_regime: macro_context_data['regime'] = macro_regime['regime']
 # --- NEW: ADVANCED RISK CALCULATIONS ---
 if not daily_data.empty:
     md_score, md_status, md_reasons = qe.detect_momentum_deterioration(daily_data)
+    var_95, cvar_95 = qe.calculate_var_cvar(daily_data)
     macro_context_data['momentum_score'] = md_score
     macro_context_data['momentum_status'] = md_status
+    macro_context_data['var_95'] = f"{var_95:.2f}%"
+    macro_context_data['cvar_95'] = f"{cvar_95:.2f}%"
 if fred_key:
     macro_risk = qe.calculate_macro_pressure(fred_key)
     if macro_risk:
@@ -223,11 +226,15 @@ if not daily_data.empty:
     ml_conf = abs(ml_prob - 0.5) * 200
     ml_color = "bullish" if ml_signal == "BULLISH" else "bearish" if ml_signal == "BEARISH" else "neutral"
     
+    # Kelly Sizing
+    kelly_pct = qe.calculate_kelly_criterion(ml_prob)
+    
     c2.markdown(f"""
     <div class='terminal-box' style="text-align:center; padding:5px;">
         <div style="font-size:0.8em; color:#00FFFF;">AI PREDICTION</div>
         <span class='{ml_color}'>{ml_signal}</span>
         <div style="font-size:0.8em; margin-top:5px; color:#AAAAAA;">CONF: {ml_conf:.0f}%</div>
+        <div style="font-size:0.75em; margin-top:3px; color:#00FFFF; border-top:1px solid #1E252F; padding-top:2px;">KELLY SIZE: {kelly_pct*100:.1f}%</div>
     </div>
     """, unsafe_allow_html=True)
     
@@ -251,6 +258,10 @@ if not daily_data.empty:
             <div style="font-size:0.7em; display:flex; justify-content:space-between; margin-top:5px;">
                 <span>FRACTAL:</span>
                 <span style="color:{h_color}">{hurst_type}</span>
+            </div>
+            <div style="font-size:0.7em; display:flex; justify-content:space-between; margin-top:2px;">
+                <span>STABILITY:</span>
+                <span style="color:#00FFFF;">{regime_data.get('prob_stay', 1.0)*100:.0f}%</span>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -310,6 +321,33 @@ with risk_c2:
         """, unsafe_allow_html=True)
     else:
         st.info("Macro Risk analysis requires valid FRED API Key.")
+
+# --- NEW: PROBABILISTIC RISK SECTION ---
+st.markdown("<div style='margin-top:10px;'></div>", unsafe_allow_html=True)
+var_c1, var_c2 = st.columns(2)
+with var_c1:
+    if not daily_data.empty:
+        st.markdown(f"""
+        <div class='terminal-box' style='border-left: 5px solid #8080FF;'>
+            <div style='color:#AAAAAA; font-size:0.8em; text-transform:uppercase;'>Value at Risk (VaR 95%)</div>
+            <div style='display:flex; align-items:baseline; gap:10px;'>
+                <span style='font-size:2em; font-weight:bold; color:#8080FF;'>{var_95:+.2f}%</span>
+            </div>
+            <div style='font-size:0.7em; color:gray;'>Worst-case historical loss over 1 day (95% confidence).</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+with var_c2:
+    if not daily_data.empty:
+        st.markdown(f"""
+        <div class='terminal-box' style='border-left: 5px solid #FF4B4B;'>
+            <div style='color:#AAAAAA; font-size:0.8em; text-transform:uppercase;'>Expected Shortfall (CVaR)</div>
+            <div style='display:flex; align-items:baseline; gap:10px;'>
+                <span style='font-size:2em; font-weight:bold; color:#FF4B4B;'>{cvar_95:+.2f}%</span>
+            </div>
+            <div style='font-size:0.7em; color:gray;'>Avg. loss if the VaR threshold is breached (Tail Risk).</div>
+        </div>
+        """, unsafe_allow_html=True)
 
 # ==============================================================================
 # 3. MACRO & SENTIMENT CONTEXT (THE "WEATHER")
@@ -610,14 +648,45 @@ with strat_main_tab:
         """, unsafe_allow_html=True)
         
         # --- MONTE CARLO ---
-        st.markdown("**🎲 PROBABILITY PATH**")
+        st.markdown("**🎲 PROBABILITY CONE (Distribution)**")
         if pred_dates is not None and pred_paths is not None:
             try:
+                # Calculate Percentiles
+                median_path = np.percentile(pred_paths, 50, axis=1)
+                upper_95 = np.percentile(pred_paths, 95, axis=1)
+                lower_5 = np.percentile(pred_paths, 5, axis=1)
+                upper_80 = np.percentile(pred_paths, 80, axis=1)
+                lower_20 = np.percentile(pred_paths, 20, axis=1)
+                
                 fig_pred = go.Figure()
-                fig_pred.add_trace(go.Scatter(x=pred_dates, y=np.mean(pred_paths, axis=1), name='Avg Path', line=dict(color='#00FFFF', dash='dash')))
-                fig_pred = terminal_chart_layout(fig_pred, title="MC FORECAST (126 Days)", height=200)
+                
+                # 90% Confidence Interval
+                fig_pred.add_trace(go.Scatter(x=pred_dates.tolist() + pred_dates.tolist()[::-1], 
+                                           y=upper_95.tolist() + lower_5.tolist()[::-1],
+                                           fill='toself', fillcolor='rgba(0, 255, 255, 0.1)',
+                                           line=dict(color='rgba(255,255,255,0)'), name='90% Range'))
+                
+                # 60% Confidence Interval
+                fig_pred.add_trace(go.Scatter(x=pred_dates.tolist() + pred_dates.tolist()[::-1], 
+                                           y=upper_80.tolist() + lower_20.tolist()[::-1],
+                                           fill='toself', fillcolor='rgba(0, 255, 255, 0.2)',
+                                           line=dict(color='rgba(255,255,255,0)'), name='60% Range'))
+                
+                # Median Path
+                fig_pred.add_trace(go.Scatter(x=pred_dates, y=median_path, name='Median', 
+                                           line=dict(color='#00FFFF', width=2)))
+                
+                fig_pred = terminal_chart_layout(fig_pred, title="MC DISTRIBUTION (126D)", height=250)
+                fig_pred.update_layout(showlegend=False)
                 st.plotly_chart(fig_pred, use_container_width=True)
-            except: st.warning("Forecast chart error")
+                
+                # Probability of Profit (Simplified)
+                final_prices = pred_paths[-1]
+                prob_up = (final_prices > curr).mean() * 100
+                st.markdown(f"<div style='font-size:0.75em; color:#AAAAAA; text-align:center;'>PROBABILITY OF UPSIDE: <span style='color:#00FFFF;'>{prob_up:.1f}%</span></div>", unsafe_allow_html=True)
+                
+            except Exception as e: 
+                st.warning(f"Forecast error: {e}")
             
         # --- RESTORED: SEASONALITY TABS ---
         if seasonality_stats:
@@ -800,13 +869,39 @@ with dyn_col2:
         <div style='font-size:1.1em; font-weight:bold;'>{vol_regime}</div>
         <div style='font-size:0.8em;'>Rank: {vol_rank*100:.0f}%</div>
         <hr style='margin:5px 0;'>
-        <div style='display:flex; justify-content:space-between;'>
-            <span>IV: {iv_display:.1f}%</span>
-            <span>HV: {hv_current:.1f}%</span>
+        <div style='font-size:0.8em; display:flex; justify-content:space-between;'>
+            <span>IV (Expected):</span>
+            <span style='color:#00FFFF;'>{iv_display:.1f}%</span>
         </div>
-        <div style='color:{"#8080FF" if vol_premium > 0 else "#00FFFF"}; font-weight:bold;'>Prem: {vol_premium:.1f}%</div>
+        <div style='font-size:0.8em; display:flex; justify-content:space-between;'>
+            <span>HV (Realized):</span>
+            <span style='color:#8080FF;'>{hv_current:.1f}%</span>
+        </div>
+        <div style='color:{"#8080FF" if vol_premium > 0 else "#00FFFF"}; font-size:0.85em; font-weight:bold; margin-top:2px;'>Prem/Disc: {vol_premium:+.1f}%</div>
     </div>
     """, unsafe_allow_html=True)
+    
+    # Expected Moves (Probabilistic Ranges)
+    if iv_display > 0:
+        range_1d = qe.calculate_implied_range(curr, iv_display, days=1)
+        range_1w = qe.calculate_implied_range(curr, iv_display, days=7)
+        
+        st.markdown(f"""
+        <div class='terminal-box' style='margin-top:10px;'>
+            <div style='color:#AAAAAA; font-size:0.75em; text-transform:uppercase;'>Implied Expected Moves</div>
+            <div style='font-size:0.9em; margin-top:5px; color:#00FFFF;'>
+                <b>1-DAY:</b> ±{range_1d['move']:,.2f} 
+            </div>
+            <div style='font-size:0.75em; color:gray;'>[{range_1d['lower_1sd']:,.0f} - {range_1d['upper_1sd']:,.0f}]</div>
+            
+            <div style='font-size:0.9em; margin-top:8px; color:#00FFFF;'>
+                <b>1-WEEK:</b> ±{range_1w['move']:,.2f}
+            </div>
+            <div style='font-size:0.75em; color:gray;'>[{range_1w['lower_1sd']:,.0f} - {range_1w['upper_1sd']:,.0f}]</div>
+            
+            <div style='font-size:0.65em; color:gray; margin-top:8px; border-top:1px solid #1E252F; padding-top:4px;'>*68% Probability (1-Sigma)</div>
+        </div>
+        """, unsafe_allow_html=True)
 
 with dyn_col3:
     # ORDER FLOW PROXY
