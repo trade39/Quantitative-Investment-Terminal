@@ -425,6 +425,15 @@ def get_market_regime(ticker):
             state_order = np.argsort(means[:, 1]) 
             regime_map = {state_order[0]: "LOW VOL", state_order[1]: "NEUTRAL (Chop)", state_order[2]: "HIGH VOL (Crisis)"}
             
+            # Calculate Transition Probability (Markov)
+            all_states = gmm.predict(X)
+            current_state_mask = all_states[:-1] == current_state
+            if np.any(current_state_mask):
+                next_states = all_states[1:][current_state_mask]
+                prob_stay = np.mean(next_states == current_state)
+            else:
+                prob_stay = 1.0
+                
             # Refine LOW VOL state
             regime_desc = regime_map.get(current_state, "NEUTRAL (Transitional)")
             
@@ -443,7 +452,12 @@ def get_market_regime(ticker):
                         regime_desc = "LOW VOL (Range-Bound)"
                  
             color = "bullish" if "Trend" in regime_desc or "LOW VOL" in regime_desc else "bearish" if "HIGH VOL" in regime_desc else "neutral"
-            return {"regime": regime_desc, "color": color, "confidence": max(probs)}
+            return {
+                "regime": regime_desc, 
+                "color": color, 
+                "confidence": max(probs),
+                "prob_stay": prob_stay
+            }
         except:
             # Fallback
             current_vol = data['Volatility'].iloc[-1]
@@ -499,7 +513,91 @@ def get_ml_prediction(ticker):
         return model, prob_up
     except: return None, 0.5
 
-# --- GAMMA EXPOSURE ---
+# --- PROBABILISTIC MODELING ENHANCEMENTS ---
+
+def calculate_implied_range(spot, iv, days=1):
+    """
+    Calculates the market-implied expected move based on IV.
+    Formula: Spot * (IV / 100) * sqrt(Days / 365)
+    Returns 1-SD (68%) and 2-SD (95%) ranges.
+    """
+    if not spot or not iv or iv <= 0:
+        return None
+    
+    # 1-SD Expected Move
+    move = spot * (iv / 100) * np.sqrt(days / 365.0)
+    
+    return {
+        "move": move,
+        "upper_1sd": spot + move,
+        "lower_1sd": spot - move,
+        "upper_2sd": spot + (move * 2),
+        "lower_2sd": spot - (move * 2)
+    }
+
+def calculate_kelly_criterion(prob_win, win_loss_ratio=1.5):
+    """
+    Calculates the Kelly Criterion for optimal position sizing.
+    Formula: K% = W - [(1 - W) / R]
+    where W = win probability, R = win/loss ratio.
+    """
+    if prob_win is None: return 0
+    
+    # We use a fractional Kelly (0.5) to be conservative
+    kelly = prob_win - ((1 - prob_win) / win_loss_ratio)
+    return max(0, kelly * 0.5) # Fractional Kelly (50% of full Kelly)
+
+def calculate_var_cvar(stock_data, confidence=0.95):
+    """
+    Calculates Value at Risk (VaR) and Conditional Value at Risk (CVaR).
+    These are probabilistic measures of potential losses.
+    """
+    if stock_data is None or stock_data.empty: return 0, 0
+    returns = stock_data['Close'].pct_change().dropna()
+    if returns.empty: return 0, 0
+    
+    # Historical VaR
+    var = np.percentile(returns, (1 - confidence) * 100)
+    
+    # Historical CVaR (Expected Shortfall)
+    cvar = returns[returns <= var].mean()
+    
+    return var * 100, cvar * 100 # Return as percentage
+
+@st.cache_data(ttl=3600)
+def generate_monte_carlo(stock_data, days=126, simulations=1000, dist='student-t'):
+    if stock_data is None or stock_data.empty or len(stock_data) < 2: return None, None
+    try:
+        from scipy.stats import t
+        close = stock_data['Close']
+        log_returns = np.log(1 + close.pct_change()).dropna()
+        
+        u, var = log_returns.mean(), log_returns.var()
+        drift = u - (0.5 * var)
+        stdev = log_returns.std()
+        
+        price_paths = np.zeros((days + 1, simulations))
+        price_paths[0] = close.iloc[-1]
+        
+        if dist == 'student-t':
+            # Estimate degrees of freedom (nu) from data
+            # nu > 2 for variance to exist, nu > 4 for kurtosis
+            params = t.fit(log_returns)
+            df_nu = params[0]
+            # Generate student-t innovations
+            innovations = t.rvs(df_nu, loc=0, scale=stdev, size=(days, simulations))
+            daily_returns = np.exp(drift + innovations)
+        else:
+            # Standard Normal (GBM)
+            daily_returns = np.exp(drift + stdev * np.random.normal(0, 1, (days, simulations)))
+            
+        for t_step in range(1, days + 1): 
+            price_paths[t_step] = price_paths[t_step - 1] * daily_returns[t_step - 1]
+            
+        return pd.date_range(start=close.index[-1], periods=days + 1, freq='B'), price_paths
+    except Exception as e: 
+        st.error(f"MC Error: {e}")
+        return None, None
 def calculate_black_scholes_gamma(S, K, T, r, sigma):
     if T <= 0 or sigma <= 0: return 0
     d1 = (np.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * np.sqrt(T))
@@ -633,21 +731,6 @@ def get_seasonality_stats(daily_data, ticker_name):
         return stats
     except: return None
 
-@st.cache_data(ttl=3600)
-def generate_monte_carlo(stock_data, days=126, simulations=1000):
-    if stock_data is None or stock_data.empty or len(stock_data) < 2: return None, None
-    try:
-        close = stock_data['Close']
-        log_returns = np.log(1 + close.pct_change())
-        u, var = log_returns.mean(), log_returns.var()
-        drift = u - (0.5 * var)
-        stdev = log_returns.std()
-        price_paths = np.zeros((days + 1, simulations))
-        price_paths[0] = close.iloc[-1]
-        daily_returns = np.exp(drift + stdev * np.random.normal(0, 1, (days, simulations)))
-        for t in range(1, days + 1): price_paths[t] = price_paths[t - 1] * daily_returns[t - 1]
-        return pd.date_range(start=close.index[-1], periods=days + 1, freq='B'), price_paths
-    except: return None, None
 
 def calculate_technical_radar(df):
     if df.empty or len(df) < 30: return None
