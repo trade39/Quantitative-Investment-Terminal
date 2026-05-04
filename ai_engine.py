@@ -58,23 +58,20 @@ def get_technical_narrative(ticker, price, daily_pct, regime, ml_signal, gex_dat
         cot_str = cot_data['sentiment']
 
     prompt = f"""
-    You are a Senior Risk Manager and Quantitative Strategist. Your primary mission is NOT to explain the past, but to QUANTIFY UNCERTAINTY and define ACTIONABLE TRIGGERS for execution.
-    SYSTEM STATE: Adaptive Parameters Active (Dynamic tuning based on uncertainty density).
-    DATA: Price: {price:,.2f} ({daily_pct:.2f}%), Regime: {regime_val} (Stability: {macro_data.get('regime_stability', 'N/A')}), MarketStructure: {ms_trend},
-    ML: {ml_signal} (Kelly Sizing: {macro_data.get('kelly_size', 'N/A')}), GEX: {gex_text}, COT: {cot_str}, Levels: {lvl_text},
+    You are a Senior Risk Manager and Quantitative Strategist. Your mission is to provide EXECUTION INTELLIGENCE.
+    SYSTEM STATE: Adaptive Parameters Active.
+    DATA: Price: {price:,.2f} ({daily_pct:.2f}%), Regime: {regime_val}, MarketStructure: {ms_trend},
+    ML PROBABILITY: {ml_signal} (Kelly Sizing: {macro_data.get('kelly_size', 'N/A')}), GEX: {gex_text}, COT: {cot_str}, Levels: {lvl_text},
     UNCERTAINTY MAP (Market-Implied): 1-Day: {macro_data.get('expected_move_1d', 'N/A')}, 1-Week: {macro_data.get('expected_move_1w', 'N/A')}
-    RISK DENSITY: VaR(95%): {macro_data.get('var_95', 'N/A')}, CVaR(Tail Risk): {macro_data.get('cvar_95', 'N/A')}, MOMENTUM DETERIORATION: {macro_data.get('momentum_status', 'Stable')} (Score: {macro_data.get('momentum_score', 0)})
-    MACRO CONTEXT: {macro_str}
+    SCENARIO PROBABILITIES (Monte Carlo): {macro_data.get('outcome_probs', 'N/A')}
+    RISK DENSITY: VaR(95%): {macro_data.get('var_95', 'N/A')}, CVaR(Tail Risk): {macro_data.get('cvar_95', 'N/A')}
     TASK:
-    1. UNCERTAINTY QUANTIFICATION: Use the Implied Expected Moves to define the current 'Vol-Space'. Is price compressed or overextended relative to the 1-week uncertainty band?
-    2. TAIL RISK BUDGETING: Analyze CVaR to define the absolute 'Panic Floor'. How should this impact position sizing relative to the Kelly Criterion?
-    3. REGIME ADHERENCE: If Regime is 'COMPRESSION' or MarketStructure is 'RANGE', define the exact 'No-Trade Zone'.
-    4. TRIGGER-BASED EXECUTION: Define the EXACT price/volume conditions required to resolve current uncertainty into a trade. No bias without a trigger.
-    5. PRIORITIZE PRICE ACTION: Use Market Structure as the primary ground truth.
-    6. SEARCH GROUNDING: Use your Google Search tool to identify real-time catalysts that could shift the uncertainty map for {ticker} in the next 7 days.
-    JD Capital Institutional style. Focus on the 'Why now' and the 'How to act'.
-    DO NOT use markdown symbols like ** or ##. Use plain text.
-    CRITICAL: DO NOT use the '$' symbol for currency amounts.
+    1. PROBABILISTIC SIZING: For each scenario in the Outcome Probabilities, calculate the risk-adjusted size. If Probability(Target) > 60%, what is the Kelly-optimal allocation?
+    2. EXECUTION INTELLIGENCE: Do not tell me what 'might' happen. Tell me the probability of each outcome and the EXACT trigger that validates the trade. 
+    3. TAIL RISK BUDGETING: Define the 'Stop-and-Reverse' or 'Exit-All' levels based on CVaR density.
+    4. SEARCH GROUNDING: Identify catalysts that could disrupt these probabilities in the next 48 hours.
+    Focus on: "What is the probability, and how do I size for it?"
+    JD Capital Institutional style. Plain text only. No markdown symbols.
     """
 
     if use_grounding and HAS_GENAI:
@@ -122,34 +119,32 @@ def generate_deep_dive_thesis(ticker, price, change, regime, ml_signal, gex_data
         cot_str = cot_data['sentiment']
 
     prompt = f"""
-    You are a Senior Risk Manager at JD Capital writing a multi-page Uncertainty Quantification & Execution Brief for {ticker}.
-    MISSION: Quantify current market uncertainty and define the actionable path forward.
-    SYSTEM ARCHITECTURE: Adaptive Quantitative System (Dynamic parameter tuning active).
-    DATA: Price: {price:,.2f} ({change:.2f}%), Regime: {regime_val} (Stability: {macro_data.get('regime_stability', 'N/A')}), MarketStructure: {ms_trend},
-    ML: {ml_signal} (Kelly Optimal Size: {macro_data.get('kelly_size', 'N/A')}), GEX: {gex_text}, COT: {cot_str}
-    UNCERTAINTY BANDS: 1-Day Move: {macro_data.get('expected_move_1d', 'N/A')}, 1-Week Move: {macro_data.get('expected_move_1w', 'N/A')}
+    You are a Senior Risk Manager at JD Capital writing a multi-page Execution Intelligence Brief for {ticker}.
+    MISSION: Quantify the probability of each outcome and define the optimal sizing strategy.
+    SYSTEM ARCHITECTURE: Adaptive Quantitative System.
+    DATA: Price: {price:,.2f} ({change:.2f}%), Regime: {regime_val}, MarketStructure: {ms_trend},
+    ML: {ml_signal} (Kelly Optimal: {macro_data.get('kelly_size', 'N/A')}), GEX: {gex_text}, COT: {cot_str}
+    PROBABILITY MATRIX: {macro_data.get('outcome_probs', 'N/A')}
+    UNCERTAINTY BANDS: 1-Day: {macro_data.get('expected_move_1d', 'N/A')}, 1-Week: {macro_data.get('expected_move_1w', 'N/A')}
     RISK DENSITY: VaR(95%): {macro_data.get('var_95', 'N/A')}, CVaR(Tail Risk): {macro_data.get('cvar_95', 'N/A')}
-    MACRO: {macro_str}
     NEWS: {news_summary}
 
-    OUTPUT FORMAT:
-    Use plain text only. DO NOT use markdown characters like "##", "###", or "**".
-    CRITICAL: DO NOT use the '$' symbol for currency.
+    OUTPUT FORMAT: Plain text. No markdown. No '$' symbols.
 
-    1. UNCERTAINTY MAPPING & STRUCTURE
-    Analyze the price action within the 1-week uncertainty bands. Is the market compressed or expanding? Define the 'Structural Walls' (exact boundaries) and the stability of the current regime.
+    1. THE PROBABILITY MATRIX
+    Analyze the Monte Carlo outcome probabilities for R1, Pivot, and S1. Which outcome has the highest empirical density? Contrast this with the AI's ML probability. Identify the 'Highest Probability Path' for the next 5 sessions.
 
-    2. PROBABILISTIC RISK & TAIL DEFENSE
-    Quantify the 'Left Tail' risk using VaR and CVaR. How does the current 'Risk Density' impact position sizing? Explain the optimal Kelly allocation relative to the volatility-adjusted stop levels.
+    2. ADAPTIVE POSITION SIZING (KELLY)
+    Based on the probabilities above, what is the optimal risk-adjusted size for a Long vs Short position? Use the Kelly Criterion to define the 'Maximum Rational Exposure'. Explain why sizing must be reduced or increased based on current 'Risk Density' (VaR/CVaR).
 
-    3. LIQUIDITY & POSITIONING FLOWS
-    Analyze GEX and COT positioning. How do these flows shift the uncertainty map? Identify 'Gamma Walls' and 'Positioning Extremes' that could trigger a cascade.
+    3. EXECUTION INTELLIGENCE & TRIGGERS
+    Define the EXACT triggers. If Outcome A has a 70% probability, what is the 'Go/No-Go' price level? Define the Invalidation point where the probability map shifts.
 
-    4. REAL-TIME CATALYSTS (SEARCH GROUNDING)
-    Use your Google Search tool to identify catalysts (macro, geopolitical, central bank) from the last 7 days that threaten to resolve or amplify current uncertainty.
+    4. LIQUIDITY FLOWS & TAIL RISK
+    How do GEX and COT positioning amplify or dampen these probabilities? Define the 'Gamma Trap' levels.
 
-    5. EXECUTION TRIGGERS & INVALIDATION
-    Define the EXACT triggers for entry. State the 'Acceptance Criteria' (Price + Volume + Close). Define the 'Invalidation Point' where the thesis must be abandoned. No narrative, only execution logic.
+    5. FINAL INSIGHT: THE ACTION PLAN
+    Summarize the sizing, entry triggers, and exit targets in a final, no-nonsense executive summary.
     """
 
     if use_grounding and HAS_GENAI:
