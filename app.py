@@ -210,6 +210,18 @@ if not daily_data.empty:
         r1w = qe.calculate_implied_range(curr, current_iv, days=7)
         if r1d: macro_context_data['expected_move_1d'] = f"±{r1d['move']:,.2f} ({r1d['lower_1sd']:,.0f} - {r1d['upper_1sd']:,.0f})"
         if r1w: macro_context_data['expected_move_1w'] = f"±{r1w['move']:,.2f} ({r1w['lower_1sd']:,.0f} - {r1w['upper_1sd']:,.0f})"
+    
+    # NEW: Probabilistic Outcome Logic
+    pred_dates, pred_paths = qe.generate_monte_carlo(daily_data)
+    outcome_probs = {}
+    if pred_paths is not None and key_levels:
+        outcome_targets = {
+            "R1 (Bullish Target)": key_levels['R1'],
+            "Pivot (Neutral Mean)": key_levels['Pivot'],
+            "S1 (Bearish Target)": key_levels['S1']
+        }
+        outcome_probs = qe.get_outcome_probabilities(pred_paths, curr, outcome_targets)
+        macro_context_data['outcome_probs'] = outcome_probs
 if fred_key:
     macro_risk = qe.calculate_macro_pressure(fred_key)
     if macro_risk:
@@ -1037,12 +1049,25 @@ with exe_col2:
             st.plotly_chart(fig_perf, use_container_width=True)
         except: st.warning("Backtest chart error")
 
-# ==============================================================================
-# 7. UNCERTAINTY QUANTIFICATION & ACTION
-# ==============================================================================
-# --- PHASE 5: UNCERTAINTY QUANTIFICATION ---
+# --- PHASE 5: UNCERTAINTY QUANTIFICATION & EXECUTION INTELLIGENCE ---
 st.markdown("---")
-st.markdown("### 🧠 PHASE 5: UNCERTAINTY QUANTIFICATION & ACTION")
+st.markdown("### 🧠 PHASE 5: UNCERTAINTY QUANTIFICATION & EXECUTION INTELLIGENCE")
+
+# NEW: PROBABILISTIC OUTCOME MATRIX
+if outcome_probs:
+    st.markdown("<div style='margin-top:10px;'></div>", unsafe_allow_html=True)
+    st.markdown("**📊 PROBABILISTIC OUTCOME MATRIX (Empirical Probability)**")
+    p_cols = st.columns(len(outcome_probs))
+    for i, (target, prob) in enumerate(outcome_probs.items()):
+        with p_cols[i]:
+            p_color = "#00FFFF" if prob > 0.6 else "#8080FF" if prob < 0.4 else "white"
+            st.markdown(f"""
+            <div class='terminal-box' style='text-align:center; border-top: 3px solid {p_color};'>
+                <div style='color:#AAAAAA; font-size:0.7em;'>{target.upper()}</div>
+                <div style='font-size:1.5em; font-weight:bold; color:{p_color};'>{prob*100:.1f}%</div>
+                <div style='font-size:0.7em; color:gray;'>Sizing Edge: {qe.calculate_kelly_criterion(prob)*100:.1f}%</div>
+            </div>
+            """, unsafe_allow_html=True)
 
 if show_regen_warning:
     st.info(f"🔄 Asset changed to **{selected_asset}**. AI synthesis below may be stale. Regenerate to update.")
