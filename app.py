@@ -981,6 +981,7 @@ if gemini_key:
             pdf_data = {
                 "ticker": selected_asset, "price": curr, "pct": pct,
                 "ml_signal": ml_signal, "regime": regime_data['regime'] if regime_data else "N/A",
+                "ms_trend": ms_trend,
                 "narrative": st.session_state['narrative_cache'],
                 "thesis": st.session_state['thesis_cache'],
                 "levels": key_levels,
@@ -1004,8 +1005,8 @@ if gemini_key:
             
         if st.session_state['thesis_cache']:
             st.markdown(f"""
-            <div class='terminal-box' style='padding: 20px;'>
-                {st.session_state['thesis_cache']}
+            <div class='terminal-box' style='padding: 20px; font-family: Georgia, serif; line-height: 1.7;'>
+                <div style='white-space: pre-wrap; font-size: 0.9em;'>{st.session_state['thesis_cache']}</div>
             </div>
             """, unsafe_allow_html=True)
 else:
