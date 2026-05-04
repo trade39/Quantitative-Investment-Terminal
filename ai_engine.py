@@ -127,24 +127,29 @@ def generate_deep_dive_thesis(ticker, price, change, regime, ml_signal, gex_data
     PROBABILITY MATRIX: {macro_data.get('outcome_probs', 'N/A')}
     UNCERTAINTY BANDS: 1-Day: {macro_data.get('expected_move_1d', 'N/A')}, 1-Week: {macro_data.get('expected_move_1w', 'N/A')}
     RISK DENSITY: VaR(95%): {macro_data.get('var_95', 'N/A')}, CVaR(Tail Risk): {macro_data.get('cvar_95', 'N/A')}
-    NEWS: {news_summary}
+    MACRO DATA: {macro_data}
+    NEWS SUMMARY: {news_summary}
 
-    OUTPUT FORMAT: Plain text. No markdown. No '$' symbols.
+    OUTPUT FORMAT: Plain text. No markdown. No '$' symbols. 
+    LENGTH: Minimum 1,500 words. Be exhaustive.
 
-    1. THE PROBABILITY MATRIX
-    Analyze the Monte Carlo outcome probabilities for R1, Pivot, and S1. Which outcome has the highest empirical density? Contrast this with the AI's ML probability. Identify the 'Highest Probability Path' for the next 5 sessions.
+    1. UNCERTAINTY MAPPING & STRUCTURE
+    Analyze the price action within the 1-week uncertainty bands. Is the market compressed or expanding? Define the 'Structural Walls' (exact boundaries) and the stability of the current regime.
 
-    2. ADAPTIVE POSITION SIZING (KELLY)
-    Based on the probabilities above, what is the optimal risk-adjusted size for a Long vs Short position? Use the Kelly Criterion to define the 'Maximum Rational Exposure'. Explain why sizing must be reduced or increased based on current 'Risk Density' (VaR/CVaR).
+    2. THE MACRO CROSSROADS
+    Analyze the Macro Context (Yield Curve, CPI, Rates) and the 'Macro Pressure' score. How do these high-level forces shift the probability of the 'Bullish' vs 'Bearish' outcomes? Discuss the recession probability and its impact on this specific asset class.
 
-    3. EXECUTION INTELLIGENCE & TRIGGERS
-    Define the EXACT triggers. If Outcome A has a 70% probability, what is the 'Go/No-Go' price level? Define the Invalidation point where the probability map shifts.
+    3. REAL-TIME CATALYSTS & NEWS (SEARCH GROUNDING)
+    You MUST use your Google Search tool to identify catalysts (macro, geopolitical, central bank) from the last 7 days. Focus on how these live catalysts disrupt the 'Uncertainty Map'. Detail how specific news items (earnings, data releases, geopolitical shifts) are resolving or amplifying current volatility.
 
-    4. LIQUIDITY FLOWS & TAIL RISK
-    How do GEX and COT positioning amplify or dampen these probabilities? Define the 'Gamma Trap' levels.
+    4. PROBABILISTIC RISK & TAIL DEFENSE
+    Quantify the 'Left Tail' risk using VaR and CVaR. How does the current 'Risk Density' impact position sizing? Explain the optimal Kelly allocation relative to the volatility-adjusted stop levels.
 
-    5. FINAL INSIGHT: THE ACTION PLAN
-    Summarize the sizing, entry triggers, and exit targets in a final, no-nonsense executive summary.
+    5. LIQUIDITY & POSITIONING FLOWS
+    Analyze GEX and COT positioning. How do these flows shift the uncertainty map? Identify 'Gamma Walls' and 'Positioning Extremes' that could trigger a cascade.
+
+    6. FINAL INSIGHT: THE ACTION PLAN
+    Define the EXACT triggers for entry. State the 'Acceptance Criteria' (Price + Volume + Close). Summarize the sizing, entry triggers, and exit targets in a final, no-nonsense executive summary.
     """
 
     if use_grounding and HAS_GENAI:
