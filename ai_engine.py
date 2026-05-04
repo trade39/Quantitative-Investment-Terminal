@@ -59,16 +59,19 @@ def get_technical_narrative(ticker, price, daily_pct, regime, ml_signal, gex_dat
 
     prompt = f"""
     You are a Senior Portfolio Manager. Analyze data for {ticker} and write a detailed, comprehensive executive summary.
-    DATA: Price: {price:,.2f} ({daily_pct:.2f}%), Regime: {regime_val}, MarketStructure: {ms_trend},
-    ML: {ml_signal}, GEX: {gex_text}, COT: {cot_str}, Levels: {lvl_text},
-    MOMENTUM DETERIORATION: {macro_data.get('momentum_status', 'Stable')} (Score: {macro_data.get('momentum_score', 0)})
+    DATA: Price: {price:,.2f} ({daily_pct:.2f}%), Regime: {regime_val} (Stability: {macro_data.get('regime_stability', 'N/A')}), MarketStructure: {ms_trend},
+    ML: {ml_signal} (Kelly Sizing: {macro_data.get('kelly_size', 'N/A')}), GEX: {gex_text}, COT: {cot_str}, Levels: {lvl_text},
+    EXPECTED MOVE (Market-Implied): 1-Day: {macro_data.get('expected_move_1d', 'N/A')}, 1-Week: {macro_data.get('expected_move_1w', 'N/A')}
+    RISK METRICS: VaR(95%): {macro_data.get('var_95', 'N/A')}, CVaR(Tail Risk): {macro_data.get('cvar_95', 'N/A')}, MOMENTUM DETERIORATION: {macro_data.get('momentum_status', 'Stable')} (Score: {macro_data.get('momentum_score', 0)})
     MACRO CONTEXT: {macro_str}
     TASK:
-    1. REGIME ADHERENCE: If Regime is 'COMPRESSION', 'RANGE-BOUND', or MarketStructure indicates 'RANGE', DO NOT label it a trend. State the explicit range boundaries.
-    2. STRICT NEUTRALITY PRE-BREAKOUT: A 'Boundary Test' is NOT a directional bias. If the price is in the 'NO-TRADE CHOP ZONE', expressly forbid entering new positions until boundaries are tested.
-    3. TRIGGER-BASED EXECUTION: Provide actionable triggers WITH acceptance criteria (e.g., "Wait for daily close > [High] with volume confirmation"). Do not front-run the breakout.
-    4. PRIORITIZE PRICE ACTION: Use Market Structure and Levels as the primary signal.
-    5. INTEGRATE SEARCH GROUNDING: You MUST use your Google Search tool to cover global macro conditions, key data releases, and actionable insights for {ticker}. Focus on:
+    1. PROBABILISTIC ANALYSIS: Incorporate the Implied Expected Moves into your risk assessment. State if the current levels are within the market's expected 1-day/1-week range.
+    2. TAIL RISK: Specifically mention the CVaR (Expected Shortfall) to define the severity of potential 'Left Tail' events.
+    3. REGIME ADHERENCE: If Regime is 'COMPRESSION', 'RANGE-BOUND', or MarketStructure indicates 'RANGE', DO NOT label it a trend. State the explicit range boundaries.
+    4. STRICT NEUTRALITY PRE-BREAKOUT: A 'Boundary Test' is NOT a directional bias. If the price is in the 'NO-TRADE CHOP ZONE', expressly forbid entering new positions until boundaries are tested.
+    5. TRIGGER-BASED EXECUTION: Provide actionable triggers WITH acceptance criteria (e.g., "Wait for daily close > [High] with volume confirmation"). Do not front-run the breakout.
+    6. PRIORITIZE PRICE ACTION: Use Market Structure and Levels as the primary signal.
+    7. INTEGRATE SEARCH GROUNDING: You MUST use your Google Search tool to cover global macro conditions, key data releases, and actionable insights for {ticker}. Focus on:
        - Key economic data release breakdowns
        - Cross-asset positioning & flow insights
        - Central bank watch & rate path expectations
@@ -125,8 +128,10 @@ def generate_deep_dive_thesis(ticker, price, change, regime, ml_signal, gex_data
 
     prompt = f"""
     You are a Senior Portfolio Manager at JD Capital writing a comprehensive, multi-page Investment Thesis for {ticker}.
-    DATA: Price: {price:,.2f} ({change:.2f}%), Regime: {regime_val}, MarketStructure: {ms_trend},
-    ML: {ml_signal}, GEX: {gex_text}, COT: {cot_str}
+    DATA: Price: {price:,.2f} ({change:.2f}%), Regime: {regime_val} (Stability: {macro_data.get('regime_stability', 'N/A')}), MarketStructure: {ms_trend},
+    ML: {ml_signal} (Kelly Optimal Size: {macro_data.get('kelly_size', 'N/A')}), GEX: {gex_text}, COT: {cot_str}
+    PROBABILISTIC RANGES: 1-Day Move: {macro_data.get('expected_move_1d', 'N/A')}, 1-Week Move: {macro_data.get('expected_move_1w', 'N/A')}
+    RISK METRICS: VaR(95%): {macro_data.get('var_95', 'N/A')}, CVaR(Tail Risk): {macro_data.get('cvar_95', 'N/A')}
     MACRO: {macro_str}
     NEWS: {news_summary}
 
@@ -139,24 +144,24 @@ def generate_deep_dive_thesis(ticker, price, change, regime, ml_signal, gex_data
     CRITICAL: DO NOT use the '$' symbol for currency (write 4,668.79 USD or just 4,668.79 instead of $4,668.79) to avoid rendering issues.
 
     1. PRICE ACTION & MARKET STRUCTURE
-    Distinguish Trend vs Range in exhaustive detail. If RANGE, define exact boundaries and what each boundary represents structurally. Identify whether current price is in a 'Boundary Test', 'NO-TRADE CHOP ZONE', or trending. Elaborate on the significance of the current price action within the broader market context.
+    Distinguish Trend vs Range in exhaustive detail. If RANGE, define exact boundaries and what each boundary represents structurally. Analyze the 'Regime Stability' and what it implies for the longevity of the current environment.
 
-    2. INSTITUTIONAL POSITIONING & FLOW
+    2. PROBABILISTIC RISK & TAIL ANALYSIS
+    Analyze the VaR and CVaR (Expected Shortfall). Explain the 'Left Tail' risk in the current asset context. How does the market-implied 1-week expected move compare to historical volatility? Incorporate the Kelly Criterion sizing logic into the risk-budgeting discussion.
+
+    3. INSTITUTIONAL POSITIONING & FLOW
     Analyze in depth how options gamma exposure (GEX) and the COT report positioning affect potential volatility and directional bias. Explain smart money behavior, what the COT data implies about medium-term conviction, and how gamma dynamics could amplify or dampen any move.
 
-    3. THE MACRO CROSSROADS & RECENT NEWS
+    4. THE MACRO CROSSROADS & RECENT NEWS
     You MUST use your Google Search tool to find live, real-time news specifically about {ticker} from strictly within the last 7 days. You must cover global macro conditions, key data releases, and actionable insights. Focus on:
        - Key economic data release breakdowns
        - Cross-asset positioning & flow insights
        - Central bank watch & rate path expectations
-       - Weekly deep-dive research notes
+       - Recent deep-dive research notes
     Detail how each live catalyst (macro events, geopolitical, Fed policy, economic data) directly impacts the execution plan. Explain the interplay between all macro forces. Know what's moving markets before you trade.
 
-    4. CORE THESIS & EXECUTION BIAS
+    5. CORE THESIS & EXECUTION BIAS
     State the primary thesis in full. Provide explicit Trigger-Based Execution with exact price levels. State the Acceptance Criteria (daily close + volume confirmation). If in the Chop Zone, detail exactly what market behavior is required before initiating a position. Explain the risk-reward dynamic.
-
-    5. KEY LEVELS & INVALIDATION
-    Define all precise support, resistance, and pivot levels with context. State exact conditions that would invalidate the long thesis and the short thesis separately. Define what constitutes a false breakout vs a confirmed one.
     """
 
     if use_grounding and HAS_GENAI:
