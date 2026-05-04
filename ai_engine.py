@@ -58,7 +58,8 @@ def get_technical_narrative(ticker, price, daily_pct, regime, ml_signal, gex_dat
         cot_str = cot_data['sentiment']
 
     prompt = f"""
-    You are a Senior Portfolio Manager. Analyze data for {ticker} and write a detailed, comprehensive executive summary.
+    You are a Senior Portfolio Manager operating an ADAPTIVE QUANTITATIVE TERMINAL. Analyze data for {ticker} and write a detailed, comprehensive executive summary.
+    SYSTEM STATE: Adaptive Parameters Active (Regime-tuned indicators).
     DATA: Price: {price:,.2f} ({daily_pct:.2f}%), Regime: {regime_val} (Stability: {macro_data.get('regime_stability', 'N/A')}), MarketStructure: {ms_trend},
     ML: {ml_signal} (Kelly Sizing: {macro_data.get('kelly_size', 'N/A')}), GEX: {gex_text}, COT: {cot_str}, Levels: {lvl_text},
     EXPECTED MOVE (Market-Implied): 1-Day: {macro_data.get('expected_move_1d', 'N/A')}, 1-Week: {macro_data.get('expected_move_1w', 'N/A')}
@@ -128,6 +129,7 @@ def generate_deep_dive_thesis(ticker, price, change, regime, ml_signal, gex_data
 
     prompt = f"""
     You are a Senior Portfolio Manager at JD Capital writing a comprehensive, multi-page Investment Thesis for {ticker}.
+    SYSTEM ARCHITECTURE: Adaptive Quantitative System (Dynamic parameter tuning active).
     DATA: Price: {price:,.2f} ({change:.2f}%), Regime: {regime_val} (Stability: {macro_data.get('regime_stability', 'N/A')}), MarketStructure: {ms_trend},
     ML: {ml_signal} (Kelly Optimal Size: {macro_data.get('kelly_size', 'N/A')}), GEX: {gex_text}, COT: {cot_str}
     PROBABILISTIC RANGES: 1-Day Move: {macro_data.get('expected_move_1d', 'N/A')}, 1-Week Move: {macro_data.get('expected_move_1w', 'N/A')}
