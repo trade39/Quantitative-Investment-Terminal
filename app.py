@@ -1038,11 +1038,11 @@ with exe_col2:
         except: st.warning("Backtest chart error")
 
 # ==============================================================================
-# 7. AI SYNTHESIS (THE CONCLUSION)
+# 7. UNCERTAINTY QUANTIFICATION & ACTION
 # ==============================================================================
-# --- PHASE 5: AI SYNTHESIS ---
+# --- PHASE 5: UNCERTAINTY QUANTIFICATION ---
 st.markdown("---")
-st.markdown("### 🧠 PHASE 5: AI SYNTHESIS")
+st.markdown("### 🧠 PHASE 5: UNCERTAINTY QUANTIFICATION & ACTION")
 
 if show_regen_warning:
     st.info(f"🔄 Asset changed to **{selected_asset}**. AI synthesis below may be stale. Regenerate to update.")
@@ -1061,7 +1061,7 @@ if gemini_key:
         time_since_last = current_time - st.session_state['last_ai_call_time']
         can_call = time_since_last > cooldown
         
-        if st.button("📝 GENERATE EXECUTIVE BRIEF", disabled=not can_call):
+        if st.button("📝 QUANTIFY UNCERTAINTY (Brief)", disabled=not can_call):
             if can_call:
                 with st.spinner("Synthesizing..."):
                     st.session_state['last_ai_call_time'] = current_time
@@ -1083,7 +1083,7 @@ if gemini_key:
                     time.sleep(1)
                 st.rerun()
                 
-        if st.button("🔎 GENERATE DEEP THESIS", disabled=not can_call):
+        if st.button("🔎 GENERATE EXECUTION THESIS", disabled=not can_call):
              if can_call:
                 with st.spinner("Writing Thesis..."):
                     st.session_state['last_ai_call_time'] = current_time
