@@ -293,7 +293,7 @@ if not daily_data.empty:
         st.markdown("<div style='margin-top:10px;'></div>", unsafe_allow_html=True)
         r_cols = st.columns(3)
         for i, (key, sig) in enumerate(radar_signals.items()):
-            with r_cols[i]:
+            with r_cols[i % 3]:
                 st.markdown(f"""
                 <div class='terminal-box' style="text-align:center; padding:5px; border: 1px solid #1E252F;">
                     <div style="font-size:0.7em; color:#AAAAAA; text-transform:uppercase;">{key}</div>
