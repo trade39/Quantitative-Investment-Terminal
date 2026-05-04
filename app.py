@@ -887,21 +887,19 @@ with dyn_col2:
         range_1w = qe.calculate_implied_range(curr, iv_display, days=7)
         
         st.markdown(f"""
-        <div class='terminal-box' style='margin-top:10px;'>
-            <div style='color:#AAAAAA; font-size:0.75em; text-transform:uppercase;'>Implied Expected Moves</div>
-            <div style='font-size:0.9em; margin-top:5px; color:#00FFFF;'>
-                <b>1-DAY:</b> ±{range_1d['move']:,.2f} 
-            </div>
-            <div style='font-size:0.75em; color:gray;'>[{range_1d['lower_1sd']:,.0f} - {range_1d['upper_1sd']:,.0f}]</div>
-            
-            <div style='font-size:0.9em; margin-top:8px; color:#00FFFF;'>
-                <b>1-WEEK:</b> ±{range_1w['move']:,.2f}
-            </div>
-            <div style='font-size:0.75em; color:gray;'>[{range_1w['lower_1sd']:,.0f} - {range_1w['upper_1sd']:,.0f}]</div>
-            
-            <div style='font-size:0.65em; color:gray; margin-top:8px; border-top:1px solid #1E252F; padding-top:4px;'>*68% Probability (1-Sigma)</div>
-        </div>
-        """, unsafe_allow_html=True)
+<div class='terminal-box' style='margin-top:10px;'>
+    <div style='color:#AAAAAA; font-size:0.75em; text-transform:uppercase;'>Implied Expected Moves</div>
+    <div style='font-size:0.9em; margin-top:5px; color:#00FFFF;'>
+        <b>1-DAY:</b> ±{range_1d['move']:,.2f} 
+    </div>
+    <div style='font-size:0.75em; color:gray;'>[{range_1d['lower_1sd']:,.0f} - {range_1d['upper_1sd']:,.0f}]</div>
+    <div style='font-size:0.9em; margin-top:8px; color:#00FFFF;'>
+        <b>1-WEEK:</b> ±{range_1w['move']:,.2f}
+    </div>
+    <div style='font-size:0.75em; color:gray;'>[{range_1w['lower_1sd']:,.0f} - {range_1w['upper_1sd']:,.0f}]</div>
+    <div style='font-size:0.65em; color:gray; margin-top:8px; border-top:1px solid #1E252F; padding-top:4px;'>*68% Probability (1-Sigma)</div>
+</div>
+""", unsafe_allow_html=True)
 
 with dyn_col3:
     # ORDER FLOW PROXY
