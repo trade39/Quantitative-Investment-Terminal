@@ -572,17 +572,42 @@ def calculate_implied_range(spot, iv, days=1):
         "lower_2sd": spot - (move * 2)
     }
 
-def calculate_kelly_criterion(prob_win, win_loss_ratio=1.5):
+def calculate_kelly_criterion(prob_win, win_loss_ratio=1.5, fraction=0.5):
     """
     Calculates the Kelly Criterion for optimal position sizing.
-    Formula: K% = W - [(1 - W) / R]
-    where W = win probability, R = win/loss ratio.
+    Standard: K% = W - [(1 - W) / R]
     """
-    if prob_win is None: return 0
+    if prob_win is None or prob_win <= 0: return 0
     
-    # We use a fractional Kelly (0.5) to be conservative
-    kelly = prob_win - ((1 - prob_win) / win_loss_ratio)
-    return max(0, kelly * 0.5) # Fractional Kelly (50% of full Kelly)
+    # Kelly Formula
+    k_percent = prob_win - ((1 - prob_win) / win_loss_ratio)
+    
+    # Apply fractional Kelly for capital preservation
+    final_size = max(0, k_percent * fraction)
+    return final_size
+
+def get_outcome_probabilities(paths, current_price, targets):
+    """
+    Calculates the empirical probability of hitting specific targets
+    based on the Monte Carlo paths.
+    """
+    if paths is None or paths.size == 0 or not targets: return {}
+    
+    n_sims = paths.shape[1]
+    outcome_probs = {}
+    
+    for label, target_price in targets.items():
+        if target_price is None: continue
+        # Did the path EVER touch the target? (Path Dependency)
+        if target_price > current_price:
+            hits = np.any(paths >= target_price, axis=0)
+        else:
+            hits = np.any(paths <= target_price, axis=0)
+        
+        prob = np.sum(hits) / n_sims
+        outcome_probs[label] = prob
+        
+    return outcome_probs
 
 def calculate_adaptive_risk_levels(df, spot, regime="STABLE"):
     """
