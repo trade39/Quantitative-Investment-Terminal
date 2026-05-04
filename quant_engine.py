@@ -12,8 +12,11 @@ from data_engine import get_fred_series
 try:
     from openbb import obb
     HAS_OPENBB = True
-except ImportError:
+except Exception:
+    # Catches ImportError AND filesystem permission errors (e.g., Streamlit Cloud
+    # read-only filesystem where OpenBB's auto_build() cannot create a lock file).
     HAS_OPENBB = False
+    obb = None
 
 # --- 1. ADVANCED VOLATILITY MODELING ---
 def calculate_garman_klass_vol(df, window=20, trading_periods=252):
