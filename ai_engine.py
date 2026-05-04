@@ -68,7 +68,12 @@ def get_technical_narrative(ticker, price, daily_pct, regime, ml_signal, gex_dat
     2. STRICT NEUTRALITY PRE-BREAKOUT: A 'Boundary Test' is NOT a directional bias. If the price is in the 'NO-TRADE CHOP ZONE', expressly forbid entering new positions until boundaries are tested.
     3. TRIGGER-BASED EXECUTION: Provide actionable triggers WITH acceptance criteria (e.g., "Wait for daily close > [High] with volume confirmation"). Do not front-run the breakout.
     4. PRIORITIZE PRICE ACTION: Use Market Structure and Levels as the primary signal.
-    5. INTEGRATE NEWS: You MUST use your Google Search tool to find live, real-time news specifically about {ticker} from strictly within the last 7 days. Ignore irrelevant static news. Explicitly detail how these live catalysts impact the execution plan.
+    5. INTEGRATE SEARCH GROUNDING: You MUST use your Google Search tool to cover global macro conditions, key data releases, and actionable insights for {ticker}. Focus on:
+       - Key economic data release breakdowns
+       - Cross-asset positioning & flow insights
+       - Central bank watch & rate path expectations
+       - Recent deep-dive research notes
+       Detail exactly how these live catalysts impact the execution plan. Know what's moving markets before you trade. Use live, real-time news from strictly within the last 7 days.
     JD Capital Institutional style. Elaborate deeply on the technical and macro interactions.
     DO NOT use markdown symbols like ** or ##. Use plain text.
     CRITICAL: DO NOT use the '$' symbol for currency amounts (e.g., write 4,668.79 USD or just 4,668.79 instead of $4,668.79) to avoid markdown math rendering issues.
@@ -140,7 +145,12 @@ def generate_deep_dive_thesis(ticker, price, change, regime, ml_signal, gex_data
     Analyze in depth how options gamma exposure (GEX) and the COT report positioning affect potential volatility and directional bias. Explain smart money behavior, what the COT data implies about medium-term conviction, and how gamma dynamics could amplify or dampen any move.
 
     3. THE MACRO CROSSROADS & RECENT NEWS
-    You MUST use your Google Search tool to find live, real-time news specifically about {ticker} from strictly within the last 7 days. Detail how each live catalyst (macro events, geopolitical, Fed policy, economic data) directly impacts the execution plan. Explain the interplay between all macro forces.
+    You MUST use your Google Search tool to find live, real-time news specifically about {ticker} from strictly within the last 7 days. You must cover global macro conditions, key data releases, and actionable insights. Focus on:
+       - Key economic data release breakdowns
+       - Cross-asset positioning & flow insights
+       - Central bank watch & rate path expectations
+       - Weekly deep-dive research notes
+    Detail how each live catalyst (macro events, geopolitical, Fed policy, economic data) directly impacts the execution plan. Explain the interplay between all macro forces. Know what's moving markets before you trade.
 
     4. CORE THESIS & EXECUTION BIAS
     State the primary thesis in full. Provide explicit Trigger-Based Execution with exact price levels. State the Acceptance Criteria (daily close + volume confirmation). If in the Chop Zone, detail exactly what market behavior is required before initiating a position. Explain the risk-reward dynamic.
