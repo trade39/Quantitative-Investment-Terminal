@@ -129,7 +129,8 @@ ml_signal = "BULLISH" if ml_prob > config.THRESHOLDS['ML_BULLISH'] else "BEARISH
 
 # Multilayer Technicals (Initial fetch for HUD)
 key_levels = qe.get_key_levels(daily_data)
-radar_signals = qe.calculate_technical_radar(daily_data)
+# ADAPTIVE: Radar now tunes its own parameters based on regime_data
+radar_signals = qe.calculate_technical_radar(daily_data, regime=regime_data['regime'] if regime_data else "STABLE")
 
 # State for Asset Change Confirmation
 if 'last_analyzed_asset' not in st.session_state: st.session_state['last_analyzed_asset'] = selected_asset
@@ -146,6 +147,8 @@ ms_df = pd.DataFrame()
 ms_trend = "N/A"
 active_fvgs = []
 smc_data = {"obs": [], "sweeps": []}
+# ADAPTIVE: Volatility lookback changes based on market fractal (Hurst)
+adaptive_vol_window = qe.get_hurst_adjusted_lookback(hurst)
 vol_cone = {}
 of_bias = "N/A"
 cot_history = pd.DataFrame()
@@ -197,6 +200,9 @@ if not daily_data.empty:
     macro_context_data['cvar_95'] = f"{cvar_95:.2f}%"
     macro_context_data['regime_stability'] = f"{regime_data.get('prob_stay', 1.0)*100:.0f}%"
     macro_context_data['kelly_size'] = f"{qe.calculate_kelly_criterion(ml_prob)*100:.1f}%"
+    
+    # NEW: Adaptive Risk Levels
+    adaptive_risk = qe.calculate_adaptive_risk_levels(daily_data, curr, regime=regime_data['regime'] if regime_data else "STABLE")
     
     # Implied Expected Moves (1D and 1W)
     if current_iv:
@@ -271,6 +277,9 @@ if not daily_data.empty:
             <div style="font-size:0.7em; display:flex; justify-content:space-between; margin-top:2px;">
                 <span>STABILITY:</span>
                 <span style="color:#00FFFF;">{regime_data.get('prob_stay', 1.0)*100:.0f}%</span>
+            </div>
+            <div style="font-size:0.6em; margin-top:5px; color:#00FFFF; border-top:1px solid #1E252F; padding-top:2px; text-align:center;">
+                SYSTEM ADAPTIVE: ACTIVE
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -355,6 +364,27 @@ with var_c2:
                 <span style='font-size:2em; font-weight:bold; color:#FF4B4B;'>{cvar_95:+.2f}%</span>
             </div>
             <div style='font-size:0.7em; color:gray;'>Avg. loss if the VaR threshold is breached (Tail Risk).</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+# --- NEW: ADAPTIVE EXECUTION LEVELS ---
+if adaptive_risk:
+    st.markdown("<div style='margin-top:10px;'></div>", unsafe_allow_html=True)
+    ar_c1, ar_c2 = st.columns(2)
+    with ar_c1:
+        st.markdown(f"""
+        <div class='terminal-box' style='border-left: 5px solid #8080FF;'>
+            <div style='color:#AAAAAA; font-size:0.8em; text-transform:uppercase;'>Adaptive Stop Loss (ATR-Based)</div>
+            <div style='font-size:1.5em; font-weight:bold; color:#8080FF;'>{adaptive_risk['stop_loss']:,.2f}</div>
+            <div style='font-size:0.7em; color:gray;'>Volatility Multiplier: {adaptive_risk['mult']}x ATR</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with ar_c2:
+        st.markdown(f"""
+        <div class='terminal-box' style='border-left: 5px solid #00FFFF;'>
+            <div style='color:#AAAAAA; font-size:0.8em; text-transform:uppercase;'>Adaptive Take Profit</div>
+            <div style='font-size:1.5em; font-weight:bold; color:#00FFFF;'>{adaptive_risk['take_profit']:,.2f}</div>
+            <div style='font-size:0.7em; color:gray;'>Target: 1.5x Risk Units</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -831,7 +861,8 @@ st.markdown("### ⚙️ PHASE 3: MARKET DYNAMICS (Vol & Flow)")
 
 with st.spinner("Calculating Volatility Surface..."):
     gex_df, gex_date, gex_spot, current_iv = qe.get_gex_profile(asset_info['opt_ticker'])
-    vol_cone = qe.get_volatility_cone(daily_data)
+    # ADAPTIVE: Volatility cone window is now dynamic
+    vol_cone = qe.get_volatility_cone(daily_data, windows=[int(adaptive_vol_window)])
     of_df, of_bias = qe.calculate_order_flow_proxy(daily_data)
 
 dyn_col1, dyn_col2, dyn_col3 = st.columns(3)
