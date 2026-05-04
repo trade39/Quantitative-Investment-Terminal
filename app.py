@@ -41,7 +41,17 @@ with st.sidebar:
         st.session_state['last_asset'] = selected_asset
 
     use_demo_data = st.checkbox("🛠️ USE DEMO DATA (Save Quota)", value=True, help="Use mock data for Calendar to save RapidAPI credits.")
-    use_grounding = st.checkbox("🔍 ENABLE SEARCH GROUNDING", value=False, help="Enable real-time Google Search grounding for up-to-date news.")
+    use_grounding = st.checkbox("🔍 ENABLE SEARCH GROUNDING", value=False, help="Enable real-time Google Search grounding for global macro conditions and data releases.")
+    if use_grounding:
+        st.markdown("""
+        <div style='font-size:0.7em; color:#00FFFF; line-height:1.2; margin-bottom:10px;'>
+        • Global macro conditions & data releases<br>
+        • Economic data release breakdowns<br>
+        • Cross-asset positioning & flow insights<br>
+        • Central bank watch & rate path expectations<br>
+        • Weekly deep-dive research notes
+        </div>
+        """, unsafe_allow_html=True)
     
     st.markdown("---")
     
