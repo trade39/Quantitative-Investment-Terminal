@@ -222,6 +222,22 @@ def get_grounded_response(prompt, api_key, model_name=None, max_tokens=16384):
                 
         return full_text
     except Exception as e:
+        # FALLBACK: If Grounding fails (e.g. 503 High Demand), try standard generation
+        if "503" in str(e) or "UNAVAILABLE" in str(e):
+            try:
+                # Remove tools for fallback
+                config_no_tools = types.GenerateContentConfig(
+                    temperature=1.0,
+                    max_output_tokens=max_tokens
+                )
+                response = client.models.generate_content(
+                    model=m_name,
+                    contents=prompt,
+                    config=config_no_tools
+                )
+                return "⚠️ (SEARCH UNAVAILABLE - HIGH DEMAND FALLBACK ACTIVE)\n\n" + response.text
+            except Exception as fallback_e:
+                return f"Grounding API Error (Fallback Failed): {str(fallback_e)}"
         return f"Grounding API Error: {str(e)}"
 
 def calculate_news_sentiment(news_items):
