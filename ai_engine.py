@@ -58,29 +58,23 @@ def get_technical_narrative(ticker, price, daily_pct, regime, ml_signal, gex_dat
         cot_str = cot_data['sentiment']
 
     prompt = f"""
-    You are a Senior Portfolio Manager operating an ADAPTIVE QUANTITATIVE TERMINAL. Analyze data for {ticker} and write a detailed, comprehensive executive summary.
-    SYSTEM STATE: Adaptive Parameters Active (Regime-tuned indicators).
+    You are a Senior Risk Manager and Quantitative Strategist. Your primary mission is NOT to explain the past, but to QUANTIFY UNCERTAINTY and define ACTIONABLE TRIGGERS for execution.
+    SYSTEM STATE: Adaptive Parameters Active (Dynamic tuning based on uncertainty density).
     DATA: Price: {price:,.2f} ({daily_pct:.2f}%), Regime: {regime_val} (Stability: {macro_data.get('regime_stability', 'N/A')}), MarketStructure: {ms_trend},
     ML: {ml_signal} (Kelly Sizing: {macro_data.get('kelly_size', 'N/A')}), GEX: {gex_text}, COT: {cot_str}, Levels: {lvl_text},
-    EXPECTED MOVE (Market-Implied): 1-Day: {macro_data.get('expected_move_1d', 'N/A')}, 1-Week: {macro_data.get('expected_move_1w', 'N/A')}
-    RISK METRICS: VaR(95%): {macro_data.get('var_95', 'N/A')}, CVaR(Tail Risk): {macro_data.get('cvar_95', 'N/A')}, MOMENTUM DETERIORATION: {macro_data.get('momentum_status', 'Stable')} (Score: {macro_data.get('momentum_score', 0)})
+    UNCERTAINTY MAP (Market-Implied): 1-Day: {macro_data.get('expected_move_1d', 'N/A')}, 1-Week: {macro_data.get('expected_move_1w', 'N/A')}
+    RISK DENSITY: VaR(95%): {macro_data.get('var_95', 'N/A')}, CVaR(Tail Risk): {macro_data.get('cvar_95', 'N/A')}, MOMENTUM DETERIORATION: {macro_data.get('momentum_status', 'Stable')} (Score: {macro_data.get('momentum_score', 0)})
     MACRO CONTEXT: {macro_str}
     TASK:
-    1. PROBABILISTIC ANALYSIS: Incorporate the Implied Expected Moves into your risk assessment. State if the current levels are within the market's expected 1-day/1-week range.
-    2. TAIL RISK: Specifically mention the CVaR (Expected Shortfall) to define the severity of potential 'Left Tail' events.
-    3. REGIME ADHERENCE: If Regime is 'COMPRESSION', 'RANGE-BOUND', or MarketStructure indicates 'RANGE', DO NOT label it a trend. State the explicit range boundaries.
-    4. STRICT NEUTRALITY PRE-BREAKOUT: A 'Boundary Test' is NOT a directional bias. If the price is in the 'NO-TRADE CHOP ZONE', expressly forbid entering new positions until boundaries are tested.
-    5. TRIGGER-BASED EXECUTION: Provide actionable triggers WITH acceptance criteria (e.g., "Wait for daily close > [High] with volume confirmation"). Do not front-run the breakout.
-    6. PRIORITIZE PRICE ACTION: Use Market Structure and Levels as the primary signal.
-    7. INTEGRATE SEARCH GROUNDING: You MUST use your Google Search tool to cover global macro conditions, key data releases, and actionable insights for {ticker}. Focus on:
-       - Key economic data release breakdowns
-       - Cross-asset positioning & flow insights
-       - Central bank watch & rate path expectations
-       - Recent deep-dive research notes
-       Detail exactly how these live catalysts impact the execution plan. Know what's moving markets before you trade. Use live, real-time news from strictly within the last 7 days.
-    JD Capital Institutional style. Elaborate deeply on the technical and macro interactions.
+    1. UNCERTAINTY QUANTIFICATION: Use the Implied Expected Moves to define the current 'Vol-Space'. Is price compressed or overextended relative to the 1-week uncertainty band?
+    2. TAIL RISK BUDGETING: Analyze CVaR to define the absolute 'Panic Floor'. How should this impact position sizing relative to the Kelly Criterion?
+    3. REGIME ADHERENCE: If Regime is 'COMPRESSION' or MarketStructure is 'RANGE', define the exact 'No-Trade Zone'.
+    4. TRIGGER-BASED EXECUTION: Define the EXACT price/volume conditions required to resolve current uncertainty into a trade. No bias without a trigger.
+    5. PRIORITIZE PRICE ACTION: Use Market Structure as the primary ground truth.
+    6. SEARCH GROUNDING: Use your Google Search tool to identify real-time catalysts that could shift the uncertainty map for {ticker} in the next 7 days.
+    JD Capital Institutional style. Focus on the 'Why now' and the 'How to act'.
     DO NOT use markdown symbols like ** or ##. Use plain text.
-    CRITICAL: DO NOT use the '$' symbol for currency amounts (e.g., write 4,668.79 USD or just 4,668.79 instead of $4,668.79) to avoid markdown math rendering issues.
+    CRITICAL: DO NOT use the '$' symbol for currency amounts.
     """
 
     if use_grounding and HAS_GENAI:
@@ -128,42 +122,34 @@ def generate_deep_dive_thesis(ticker, price, change, regime, ml_signal, gex_data
         cot_str = cot_data['sentiment']
 
     prompt = f"""
-    You are a Senior Portfolio Manager at JD Capital writing a comprehensive, multi-page Investment Thesis for {ticker}.
+    You are a Senior Risk Manager at JD Capital writing a multi-page Uncertainty Quantification & Execution Brief for {ticker}.
+    MISSION: Quantify current market uncertainty and define the actionable path forward.
     SYSTEM ARCHITECTURE: Adaptive Quantitative System (Dynamic parameter tuning active).
     DATA: Price: {price:,.2f} ({change:.2f}%), Regime: {regime_val} (Stability: {macro_data.get('regime_stability', 'N/A')}), MarketStructure: {ms_trend},
     ML: {ml_signal} (Kelly Optimal Size: {macro_data.get('kelly_size', 'N/A')}), GEX: {gex_text}, COT: {cot_str}
-    PROBABILISTIC RANGES: 1-Day Move: {macro_data.get('expected_move_1d', 'N/A')}, 1-Week Move: {macro_data.get('expected_move_1w', 'N/A')}
-    RISK METRICS: VaR(95%): {macro_data.get('var_95', 'N/A')}, CVaR(Tail Risk): {macro_data.get('cvar_95', 'N/A')}
+    UNCERTAINTY BANDS: 1-Day Move: {macro_data.get('expected_move_1d', 'N/A')}, 1-Week Move: {macro_data.get('expected_move_1w', 'N/A')}
+    RISK DENSITY: VaR(95%): {macro_data.get('var_95', 'N/A')}, CVaR(Tail Risk): {macro_data.get('cvar_95', 'N/A')}
     MACRO: {macro_str}
     NEWS: {news_summary}
 
-    LENGTH REQUIREMENT: Each section below MUST be at minimum 3 substantial paragraphs (150+ words each).
-    Do NOT summarize. Be exhaustive, analytical, and institutional in tone.
-    Write as if this is a formal multi-page brief being presented to a fund's investment committee.
-
     OUTPUT FORMAT:
     Use plain text only. DO NOT use markdown characters like "##", "###", or "**".
-    CRITICAL: DO NOT use the '$' symbol for currency (write 4,668.79 USD or just 4,668.79 instead of $4,668.79) to avoid rendering issues.
+    CRITICAL: DO NOT use the '$' symbol for currency.
 
-    1. PRICE ACTION & MARKET STRUCTURE
-    Distinguish Trend vs Range in exhaustive detail. If RANGE, define exact boundaries and what each boundary represents structurally. Analyze the 'Regime Stability' and what it implies for the longevity of the current environment.
+    1. UNCERTAINTY MAPPING & STRUCTURE
+    Analyze the price action within the 1-week uncertainty bands. Is the market compressed or expanding? Define the 'Structural Walls' (exact boundaries) and the stability of the current regime.
 
-    2. PROBABILISTIC RISK & TAIL ANALYSIS
-    Analyze the VaR and CVaR (Expected Shortfall). Explain the 'Left Tail' risk in the current asset context. How does the market-implied 1-week expected move compare to historical volatility? Incorporate the Kelly Criterion sizing logic into the risk-budgeting discussion.
+    2. PROBABILISTIC RISK & TAIL DEFENSE
+    Quantify the 'Left Tail' risk using VaR and CVaR. How does the current 'Risk Density' impact position sizing? Explain the optimal Kelly allocation relative to the volatility-adjusted stop levels.
 
-    3. INSTITUTIONAL POSITIONING & FLOW
-    Analyze in depth how options gamma exposure (GEX) and the COT report positioning affect potential volatility and directional bias. Explain smart money behavior, what the COT data implies about medium-term conviction, and how gamma dynamics could amplify or dampen any move.
+    3. LIQUIDITY & POSITIONING FLOWS
+    Analyze GEX and COT positioning. How do these flows shift the uncertainty map? Identify 'Gamma Walls' and 'Positioning Extremes' that could trigger a cascade.
 
-    4. THE MACRO CROSSROADS & RECENT NEWS
-    You MUST use your Google Search tool to find live, real-time news specifically about {ticker} from strictly within the last 7 days. You must cover global macro conditions, key data releases, and actionable insights. Focus on:
-       - Key economic data release breakdowns
-       - Cross-asset positioning & flow insights
-       - Central bank watch & rate path expectations
-       - Recent deep-dive research notes
-    Detail how each live catalyst (macro events, geopolitical, Fed policy, economic data) directly impacts the execution plan. Explain the interplay between all macro forces. Know what's moving markets before you trade.
+    4. REAL-TIME CATALYSTS (SEARCH GROUNDING)
+    Use your Google Search tool to identify catalysts (macro, geopolitical, central bank) from the last 7 days that threaten to resolve or amplify current uncertainty.
 
-    5. CORE THESIS & EXECUTION BIAS
-    State the primary thesis in full. Provide explicit Trigger-Based Execution with exact price levels. State the Acceptance Criteria (daily close + volume confirmation). If in the Chop Zone, detail exactly what market behavior is required before initiating a position. Explain the risk-reward dynamic.
+    5. EXECUTION TRIGGERS & INVALIDATION
+    Define the EXACT triggers for entry. State the 'Acceptance Criteria' (Price + Volume + Close). Define the 'Invalidation Point' where the thesis must be abandoned. No narrative, only execution logic.
     """
 
     if use_grounding and HAS_GENAI:
