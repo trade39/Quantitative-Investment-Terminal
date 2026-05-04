@@ -119,30 +119,49 @@ def generate_deep_dive_thesis(ticker, price, change, regime, ml_signal, gex_data
         cot_str = cot_data['sentiment']
 
     prompt = f"""
-    Write a detailed Investment Thesis for {ticker}.
+    You are a Senior Portfolio Manager at JD Capital writing a comprehensive, multi-page Investment Thesis for {ticker}.
     DATA: Price: {price:,.2f} ({change:.2f}%), Regime: {regime_val}, MarketStructure: {ms_trend},
     ML: {ml_signal}, GEX: {gex_text}, COT: {cot_str}
     MACRO: {macro_str}
     NEWS: {news_summary}
+
+    LENGTH REQUIREMENT: Each section below MUST be at minimum 3 substantial paragraphs (150+ words each).
+    Do NOT summarize. Be exhaustive, analytical, and institutional in tone.
+    Write as if this is a formal multi-page brief being presented to a fund's investment committee.
+
     OUTPUT FORMAT:
-    Use plain text. DO NOT use markdown characters like "##", "###", or "**". Elaborate deeply on each section.
-    CRITICAL: DO NOT use the '$' symbol for currency amounts (e.g., write 4,668.79 USD or just 4,668.79 instead of $4,668.79) to avoid markdown math rendering issues.
-    1. PRICE ACTION & MARKET STRUCTURE (Primary Focus: Distinguish Trend vs Range. If RANGE, define boundaries. Identify if it is a 'Boundary Test' or 'NO-TRADE CHOP ZONE'.)
-    2. INSTITUTIONAL POSITIONING & FLOW (Analyze how options gamma and COT positioning affect potential volatility.)
-    3. THE MACRO CROSSROADS & RECENT NEWS (You MUST use your Google Search tool to find live, real-time news specifically about {ticker} from strictly within the last 7 days. Ignore the generic provided NEWS if it is irrelevant. Detail how live events drive current sentiment.)
-    4. CORE THESIS & EXECUTION BIAS (Provide Trigger-Based Execution. State the explicit Acceptance Criteria required for the breakout. If in the Chop Zone, advise patience.)
-    5. KEY LEVELS & INVALIDATION (Define precise levels and what price action would invalidate the thesis.)
+    Use plain text only. DO NOT use markdown characters like "##", "###", or "**".
+    CRITICAL: DO NOT use the '$' symbol for currency (write 4,668.79 USD or just 4,668.79 instead of $4,668.79) to avoid rendering issues.
+
+    1. PRICE ACTION & MARKET STRUCTURE
+    Distinguish Trend vs Range in exhaustive detail. If RANGE, define exact boundaries and what each boundary represents structurally. Identify whether current price is in a 'Boundary Test', 'NO-TRADE CHOP ZONE', or trending. Elaborate on the significance of the current price action within the broader market context.
+
+    2. INSTITUTIONAL POSITIONING & FLOW
+    Analyze in depth how options gamma exposure (GEX) and the COT report positioning affect potential volatility and directional bias. Explain smart money behavior, what the COT data implies about medium-term conviction, and how gamma dynamics could amplify or dampen any move.
+
+    3. THE MACRO CROSSROADS & RECENT NEWS
+    You MUST use your Google Search tool to find live, real-time news specifically about {ticker} from strictly within the last 7 days. Detail how each live catalyst (macro events, geopolitical, Fed policy, economic data) directly impacts the execution plan. Explain the interplay between all macro forces.
+
+    4. CORE THESIS & EXECUTION BIAS
+    State the primary thesis in full. Provide explicit Trigger-Based Execution with exact price levels. State the Acceptance Criteria (daily close + volume confirmation). If in the Chop Zone, detail exactly what market behavior is required before initiating a position. Explain the risk-reward dynamic.
+
+    5. KEY LEVELS & INVALIDATION
+    Define all precise support, resistance, and pivot levels with context. State exact conditions that would invalidate the long thesis and the short thesis separately. Define what constitutes a false breakout vs a confirmed one.
     """
 
     if use_grounding and HAS_GENAI:
-        return get_grounded_response(prompt, api_key, model_name)
+        return get_grounded_response(prompt, api_key, model_name, max_tokens=16384)
 
     # Fallback to new SDK (no grounding) if available
     if HAS_GENAI:
         try:
             client = get_genai_client(api_key)
             m_name = model_name if model_name else config.GEMINI_MODEL_NAME
-            response = client.models.generate_content(model=m_name, contents=prompt)
+            gen_config = types.GenerateContentConfig(
+                max_output_tokens=16384,
+                temperature=0.9
+            )
+            response = client.models.generate_content(model=m_name, contents=prompt, config=gen_config)
             return response.text
         except: pass
 
@@ -159,7 +178,7 @@ def generate_deep_dive_thesis(ticker, price, change, regime, ml_signal, gex_data
             
     return "Thesis Generation Failed: No compatible SDK found."
 
-def get_grounded_response(prompt, api_key, model_name=None):
+def get_grounded_response(prompt, api_key, model_name=None, max_tokens=16384):
     """Core function to handle Google Search Grounding using the new GenAI SDK."""
     if not HAS_GENAI: return "Search Grounding Error: google-genai SDK not installed."
     
@@ -168,10 +187,10 @@ def get_grounded_response(prompt, api_key, model_name=None):
 
     m_name = model_name if model_name else config.GEMINI_MODEL_NAME
     
-    # Configuration to enable Google Search grounding
     config_genai = types.GenerateContentConfig(
         tools=[types.Tool(google_search=types.GoogleSearch())],
-        temperature=1.0
+        temperature=1.0,
+        max_output_tokens=max_tokens
     )
 
     try:
