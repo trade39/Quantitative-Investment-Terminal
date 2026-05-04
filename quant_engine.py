@@ -9,6 +9,12 @@ from datetime import datetime
 from utils import safe_yf_download
 from data_engine import get_fred_series
 
+try:
+    from openbb import obb
+    HAS_OPENBB = True
+except ImportError:
+    HAS_OPENBB = False
+
 # --- 1. ADVANCED VOLATILITY MODELING ---
 def calculate_garman_klass_vol(df, window=20, trading_periods=252):
     """
@@ -508,21 +514,53 @@ def get_gex_profile(opt_ticker):
         except: return None, None, None, None
         
         if spot_price is None: return None, None, None, None
-        exps = tk.options
-        if not exps: return None, None, None, None
         
-        target_exp = exps[1] if len(exps) > 1 else exps[0]
-        chain = tk.option_chain(target_exp)
-        calls, puts = chain.calls, chain.puts
+        # OpenBB Data Fetch
+        try:
+            if not HAS_OPENBB:
+                raise ImportError("OpenBB not installed")
+            
+            # Fetch options chain using OpenBB
+            obb_df = obb.derivatives.options.chains(symbol=opt_ticker, provider="yfinance").to_dataframe()
+            if obb_df.empty: 
+                raise ValueError("Empty OpenBB dataframe")
+            
+            # Handle expiration dates
+            # OpenBB v4 usually returns datetime.date or str for expiration
+            exps = sorted(obb_df['expiration'].unique().tolist())
+            target_exp = exps[1] if len(exps) > 1 else exps[0]
+            
+            if isinstance(target_exp, str):
+                exp_date = datetime.strptime(target_exp, "%Y-%m-%d")
+            else:
+                exp_date = pd.to_datetime(target_exp).to_pydatetime()
+                
+            chain = obb_df[obb_df['expiration'] == target_exp]
+            calls = chain[chain['option_type'] == 'call']
+            puts = chain[chain['option_type'] == 'put']
+            
+            # Map OpenBB columns
+            c_oi_col = 'open_interest'
+            c_iv_col = 'implied_volatility'
+        except Exception as e:
+            # Fallback to yfinance if OpenBB is not configured correctly or fails
+            exps = tk.options
+            if not exps: return None, None, None, None
+            
+            target_exp = exps[1] if len(exps) > 1 else exps[0]
+            chain_yf = tk.option_chain(target_exp)
+            calls, puts = chain_yf.calls, chain_yf.puts
+            exp_date = datetime.strptime(target_exp, "%Y-%m-%d")
+            c_oi_col = 'openInterest'
+            c_iv_col = 'impliedVolatility'
         
         if calls.empty or puts.empty: return None, None, None, None
         
         # Calculate ATM IV
         atm_mask = (calls['strike'] > spot_price * 0.95) & (calls['strike'] < spot_price * 1.05)
         atm_calls = calls[atm_mask]
-        avg_iv = atm_calls['impliedVolatility'].mean() * 100 if not atm_calls.empty else 0
+        avg_iv = atm_calls[c_iv_col].mean() * 100 if not atm_calls.empty else 0
         
-        exp_date = datetime.strptime(target_exp, "%Y-%m-%d")
         days_to_exp = (exp_date - datetime.now()).days
         T = 0.001 if days_to_exp <= 0 else days_to_exp / 365.0
         gex_data = []
@@ -531,18 +569,29 @@ def get_gex_profile(opt_ticker):
             if K < spot_price * 0.75 or K > spot_price * 1.25: continue
             c_row = calls[calls['strike'] == K]
             p_row = puts[puts['strike'] == K]
-            c_oi = c_row['openInterest'].iloc[0] if not c_row.empty else 0
-            p_oi = p_row['openInterest'].iloc[0] if not p_row.empty else 0
-            c_iv = c_row['impliedVolatility'].iloc[0] if not c_row.empty and 'impliedVolatility' in c_row.columns else 0.2
-            p_iv = p_row['impliedVolatility'].iloc[0] if not p_row.empty and 'impliedVolatility' in p_row.columns else 0.2
+            
+            c_oi = c_row[c_oi_col].iloc[0] if not c_row.empty else 0
+            p_oi = p_row[c_oi_col].iloc[0] if not p_row.empty else 0
+            
+            # Fetch Implied Volatility
+            c_iv = c_row[c_iv_col].iloc[0] if not c_row.empty and c_iv_col in c_row.columns and not pd.isna(c_row[c_iv_col].iloc[0]) else 0.2
+            p_iv = p_row[c_iv_col].iloc[0] if not p_row.empty and c_iv_col in p_row.columns and not pd.isna(p_row[c_iv_col].iloc[0]) else 0.2
+            
             c_gamma = calculate_black_scholes_gamma(spot_price, K, T, 0.045, c_iv)
             p_gamma = calculate_black_scholes_gamma(spot_price, K, T, 0.045, p_iv)
             net_gex = (c_gamma * c_oi - p_gamma * p_oi) * spot_price * 100
             gex_data.append({"strike": K, "gex": net_gex})
             
         df = pd.DataFrame(gex_data, columns=['strike', 'gex'])
-        return df, target_exp, spot_price, avg_iv
-    except: return None, None, None, None
+        
+        if isinstance(target_exp, str):
+            target_exp_str = target_exp
+        else:
+            target_exp_str = target_exp.strftime("%Y-%m-%d")
+            
+        return df, target_exp_str, spot_price, avg_iv
+    except Exception as e: 
+        return None, None, None, None
 
 def calculate_volume_profile(df, bins=50):
     if df.empty: return None, None
