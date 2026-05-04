@@ -71,6 +71,7 @@ def get_technical_narrative(ticker, price, daily_pct, regime, ml_signal, gex_dat
     5. INTEGRATE NEWS: You MUST use your Google Search tool to find live, real-time news specifically about {ticker} from strictly within the last 7 days. Ignore irrelevant static news. Explicitly detail how these live catalysts impact the execution plan.
     JD Capital Institutional style. Elaborate deeply on the technical and macro interactions.
     DO NOT use markdown symbols like ** or ##. Use plain text.
+    CRITICAL: DO NOT use the '$' symbol for currency amounts (e.g., write 4,668.79 USD or just 4,668.79 instead of $4,668.79) to avoid markdown math rendering issues.
     """
 
     if use_grounding and HAS_GENAI:
@@ -125,6 +126,7 @@ def generate_deep_dive_thesis(ticker, price, change, regime, ml_signal, gex_data
     NEWS: {news_summary}
     OUTPUT FORMAT:
     Use plain text. DO NOT use markdown characters like "##", "###", or "**". Elaborate deeply on each section.
+    CRITICAL: DO NOT use the '$' symbol for currency amounts (e.g., write 4,668.79 USD or just 4,668.79 instead of $4,668.79) to avoid markdown math rendering issues.
     1. PRICE ACTION & MARKET STRUCTURE (Primary Focus: Distinguish Trend vs Range. If RANGE, define boundaries. Identify if it is a 'Boundary Test' or 'NO-TRADE CHOP ZONE'.)
     2. INSTITUTIONAL POSITIONING & FLOW (Analyze how options gamma and COT positioning affect potential volatility.)
     3. THE MACRO CROSSROADS & RECENT NEWS (You MUST use your Google Search tool to find live, real-time news specifically about {ticker} from strictly within the last 7 days. Ignore the generic provided NEWS if it is irrelevant. Detail how live events drive current sentiment.)
