@@ -21,10 +21,11 @@ except Exception:
 # --- 1. ADVANCED VOLATILITY MODELING ---
 def calculate_garman_klass_vol(df, window=20, trading_periods=252):
     """
-    Garman-Klass Volatility: More efficient than Close-to-Close volatility 
-    as it considers High, Low, Open, and Close.
+    Garman-Klass Volatility with support for adaptive windows.
     """
     try:
+        # Ensure window is valid
+        window = max(5, int(window))
         log_hl = np.log(df['High'] / df['Low']) ** 2
         log_co = np.log(df['Close'] / df['Open']) ** 2
         var = 0.5 * log_hl - (2 * np.log(2) - 1) * log_co
@@ -513,6 +514,40 @@ def get_ml_prediction(ticker):
         return model, prob_up
     except: return None, 0.5
 
+# --- ADAPTIVE SYSTEM ENGINE ---
+
+def get_hurst_adjusted_lookback(hurst, base_window=20):
+    """
+    Adjusts the lookback window based on the Hurst exponent.
+    Hurst > 0.5 (Trending) -> Use longer windows (Smooth noise).
+    Hurst < 0.5 (Mean Reverting) -> Use shorter windows (Capture reversals).
+    """
+    if hurst > 0.55: # Strong Trend
+        return base_window * 1.5
+    elif hurst < 0.45: # Mean Reversion
+        return base_window * 0.7
+    return base_window
+
+def get_adaptive_params(regime):
+    """
+    Returns a dictionary of tuned parameters based on the current market regime.
+    """
+    # Default params
+    params = {"rsi_len": 14, "macd_fast": 12, "macd_slow": 26, "ema_fast": 20, "ema_slow": 50}
+    
+    if "HIGH VOL" in regime.upper():
+        # Shorten windows to react to volatility spikes
+        params["rsi_len"] = 9
+        params["macd_fast"] = 8
+        params["macd_slow"] = 21
+    elif "COMPRESSION" in regime.upper():
+        # Lengthen windows to avoid false breakouts in tight ranges
+        params["rsi_len"] = 21
+        params["ema_fast"] = 30
+        params["ema_slow"] = 100
+        
+    return params
+
 # --- PROBABILISTIC MODELING ENHANCEMENTS ---
 
 def calculate_implied_range(spot, iv, days=1):
@@ -546,6 +581,32 @@ def calculate_kelly_criterion(prob_win, win_loss_ratio=1.5):
     # We use a fractional Kelly (0.5) to be conservative
     kelly = prob_win - ((1 - prob_win) / win_loss_ratio)
     return max(0, kelly * 0.5) # Fractional Kelly (50% of full Kelly)
+
+def calculate_adaptive_risk_levels(df, spot, regime="STABLE"):
+    """
+    Suggests Stop Loss and Take Profit levels based on ATR and current regime.
+    Adaptive: Widen stops in HIGH VOL, tighten in COMPRESSION.
+    """
+    if df.empty or not spot: return None
+    
+    # Calculate ATR
+    high_low = df['High'] - df['Low']
+    high_close = np.abs(df['High'] - df['Close'].shift())
+    low_close = np.abs(df['Low'] - df['Close'].shift())
+    tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+    atr = tr.rolling(14).mean().iloc[-1]
+    
+    # Adaptive Multiplier
+    mult = 2.0 # Baseline
+    if "HIGH VOL" in regime.upper(): mult = 3.5
+    elif "COMPRESSION" in regime.upper(): mult = 1.5
+    
+    return {
+        "stop_loss": spot - (atr * mult),
+        "take_profit": spot + (atr * mult * 1.5), # 1:1.5 RR
+        "atr": atr,
+        "mult": mult
+    }
 
 def calculate_var_cvar(stock_data, confidence=0.95):
     """
@@ -732,23 +793,37 @@ def get_seasonality_stats(daily_data, ticker_name):
     except: return None
 
 
-def calculate_technical_radar(df):
-    if df.empty or len(df) < 30: return None
+def calculate_technical_radar(df, regime="STABLE"):
+    if df.empty or len(df) < 50: return None
+    
+    # ADAPTIVE: Get tuned parameters based on regime
+    params = get_adaptive_params(regime)
+    
     data = df.copy()
     close = data['Close']
+    
+    # RSI
     delta = close.diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    gain = (delta.where(delta > 0, 0)).rolling(window=params['rsi_len']).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=params['rsi_len']).mean()
     rs = gain / loss
     data['RSI'] = 100 - (100 / (1 + rs))
-    k = close.ewm(span=12, adjust=False, min_periods=12).mean()
-    d = close.ewm(span=26, adjust=False, min_periods=26).mean()
+    
+    # MACD
+    k = close.ewm(span=params['macd_fast'], adjust=False).mean()
+    d = close.ewm(span=params['macd_slow'], adjust=False).mean()
     data['MACD'] = k - d
-    data['MACD_Signal'] = data['MACD'].ewm(span=9, adjust=False, min_periods=9).mean()
-    data['EMA_20'] = close.ewm(span=20, adjust=False).mean()
-    data['EMA_50'] = close.ewm(span=50, adjust=False).mean()
+    data['MACD_Signal'] = data['MACD'].ewm(span=9, adjust=False).mean()
+    
+    # Trend EMAs
+    data['EMA_FAST'] = close.ewm(span=params['ema_fast'], adjust=False).mean()
+    data['EMA_SLOW'] = close.ewm(span=params['ema_slow'], adjust=False).mean()
+    
     last = data.iloc[-1]
     signals = {}
+    
+    # Status Tag for UI
+    signals['Config'] = {"val": f"Adaptive ({regime})", "bias": f"RSI:{params['rsi_len']} | EMA:{params['ema_fast']}", "col": "neutral"}
     
     if last['RSI'] < 30: signals['RSI'] = {"val": f"{last['RSI']:.0f}", "bias": "OVERSOLD (Bull)", "col": "bullish"}
     elif last['RSI'] > 70: signals['RSI'] = {"val": f"{last['RSI']:.0f}", "bias": "OVERBOUGHT (Bear)", "col": "bearish"}
@@ -759,13 +834,13 @@ def calculate_technical_radar(df):
     elif macd_hist < 0 and last['MACD'] < 0: signals['MACD'] = {"val": f"{macd_hist:.2f}", "bias": "BEARISH", "col": "bearish"}
     else: signals['MACD'] = {"val": f"{macd_hist:.2f}", "bias": "NEUTRAL", "col": "neutral"}
     
-    ema_gap = abs(last['EMA_20'] - last['EMA_50']) / last['EMA_50']
+    ema_gap = abs(last['EMA_FAST'] - last['EMA_SLOW']) / last['EMA_SLOW']
     
-    if ema_gap < 0.005: # Less than 0.5% gap
+    if ema_gap < 0.005: 
         signals['Trend'] = {"val": "Compression", "bias": "TIGHTENING (Squeeze)", "col": "neutral"}
-    elif last['Close'] > last['EMA_20'] and last['EMA_20'] > last['EMA_50']:
+    elif last['Close'] > last['EMA_FAST'] and last['EMA_FAST'] > last['EMA_SLOW']:
         signals['Trend'] = {"val": "Uptrend", "bias": "STRONG BULL", "col": "bullish"}
-    elif last['Close'] < last['EMA_20'] and last['EMA_20'] < last['EMA_50']:
+    elif last['Close'] < last['EMA_FAST'] and last['EMA_FAST'] < last['EMA_SLOW']:
         signals['Trend'] = {"val": "Downtrend", "bias": "STRONG BEAR", "col": "bearish"}
     else: 
         signals['Trend'] = {"val": "Chop", "bias": "WEAK/MIXED", "col": "neutral"}
