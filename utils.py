@@ -83,10 +83,12 @@ def terminal_chart_layout(fig, title="", height=350):
     )
     return fig
 
-def md_to_rl(text, body_style, header_style):
-    """Converts basic markdown to a list of ReportLab Paragraph flowables."""
+def md_to_rl(text, body_style, header_style, bullet_style=None):
+    """Converts AI thesis text to ReportLab flowables with proper section/bullet handling."""
     elements = []
     if not text: return elements
+    if bullet_style is None: bullet_style = body_style
+    import re
     for line in text.split('\n'):
         line = line.strip()
         if not line:
