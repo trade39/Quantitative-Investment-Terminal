@@ -195,6 +195,15 @@ if not daily_data.empty:
     macro_context_data['momentum_status'] = md_status
     macro_context_data['var_95'] = f"{var_95:.2f}%"
     macro_context_data['cvar_95'] = f"{cvar_95:.2f}%"
+    macro_context_data['regime_stability'] = f"{regime_data.get('prob_stay', 1.0)*100:.0f}%"
+    macro_context_data['kelly_size'] = f"{qe.calculate_kelly_criterion(ml_prob)*100:.1f}%"
+    
+    # Implied Expected Moves (1D and 1W)
+    if current_iv:
+        r1d = qe.calculate_implied_range(curr, current_iv, days=1)
+        r1w = qe.calculate_implied_range(curr, current_iv, days=7)
+        if r1d: macro_context_data['expected_move_1d'] = f"±{r1d['move']:,.2f} ({r1d['lower_1sd']:,.0f} - {r1d['upper_1sd']:,.0f})"
+        if r1w: macro_context_data['expected_move_1w'] = f"±{r1w['move']:,.2f} ({r1w['lower_1sd']:,.0f} - {r1w['upper_1sd']:,.0f})"
 if fred_key:
     macro_risk = qe.calculate_macro_pressure(fred_key)
     if macro_risk:
