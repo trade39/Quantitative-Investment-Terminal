@@ -46,8 +46,10 @@ def get_volatility_cone(df, windows=[5, 20, 60]):
         res[f'med_{w}'] = hist_vol.median()
         res[f'curr_{w}'] = hist_vol.iloc[-1]
     
-    # Statistical Regime
-    rank = (current_vol - res['min_20']) / (res['max_20'] - res['min_20'])
+    # Statistical Regime (Use first window in list as primary)
+    w = windows[0]
+    denom = (res[f'max_{w}'] - res[f'min_{w}'])
+    rank = (current_vol - res[f'min_{w}']) / denom if denom != 0 else 0.5
     if rank < 0.2:
         regime = "COMPRESSION (Volatility Squeeze)"
     elif rank > 0.8:
