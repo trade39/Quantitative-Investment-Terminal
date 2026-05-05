@@ -357,7 +357,7 @@ def fetch_cot_history(asset_name, start_year=2024):
     
     # Filter
     if 'market' not in master_df.columns: return None
-    mask = master_df['market'].astype(str).apply(lambda x: all(k.lower() in x.lower() for k in keywords))
+    mask = master_df['market'].apply(lambda x: isinstance(x, str) and all(k.lower() in x.lower() for k in keywords))
     df_asset = master_df[mask].copy()
     
     if 'date' in df_asset.columns:
