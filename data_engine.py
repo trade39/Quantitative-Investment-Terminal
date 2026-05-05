@@ -154,6 +154,90 @@ def get_forex_factory_news(api_key, news_type='breaking'):
         return normalized_news
     except: return []
 
+# --- FINNHUB ENGINES ---
+@st.cache_data(ttl=3600)
+def get_finnhub_news(api_key, category='general', min_id=0):
+    """
+    Fetches Market News from Finnhub.
+    Category can be: general, forex, crypto, merger.
+    """
+    if not api_key: return []
+    if 'finnhub_calls' in st.session_state: st.session_state['finnhub_calls'] += 1
+    
+    url = "https://finnhub.io/api/v1/news"
+    params = {
+        'category': category,
+        'minId': min_id,
+        'token': api_key
+    }
+    
+    try:
+        response = requests.get(url, params=params)
+        if response.status_code == 200:
+            data = response.json()
+            normalized_news = []
+            for item in data[:10]: # Limit to latest 10
+                normalized_news.append({
+                    "title": item.get('headline', 'No Title'),
+                    "url": item.get('url', '#'),
+                    "source": item.get('source', 'Finnhub'),
+                    "time": datetime.fromtimestamp(item.get('datetime', datetime.now().timestamp())).strftime('%Y-%m-%d %H:%M'),
+                    "summary": item.get('summary', '')
+                })
+            return normalized_news
+        return []
+    except Exception as e:
+        return []
+
+@st.cache_data(ttl=86400)
+def get_finnhub_insider_sentiment(symbol, from_date, to_date, api_key):
+    """
+    Fetches Insider Sentiment from Finnhub.
+    """
+    if not api_key or not symbol: return pd.DataFrame()
+    if 'finnhub_calls' in st.session_state: st.session_state['finnhub_calls'] += 1
+    
+    url = "https://finnhub.io/api/v1/stock/insider-sentiment"
+    params = {
+        'symbol': symbol,
+        'from': from_date,
+        'to': to_date,
+        'token': api_key
+    }
+    
+    try:
+        response = requests.get(url, params=params)
+        if response.status_code == 200:
+            data = response.json().get('data', [])
+            return pd.DataFrame(data)
+        return pd.DataFrame()
+    except Exception as e:
+        return pd.DataFrame()
+
+@st.cache_data(ttl=86400)
+def get_finnhub_insider_transactions(symbol, api_key, limit=20):
+    """
+    Fetches Insider Transactions from Finnhub.
+    """
+    if not api_key or not symbol: return pd.DataFrame()
+    if 'finnhub_calls' in st.session_state: st.session_state['finnhub_calls'] += 1
+    
+    url = "https://finnhub.io/api/v1/stock/insider-transactions"
+    params = {
+        'symbol': symbol,
+        'limit': limit,
+        'token': api_key
+    }
+    
+    try:
+        response = requests.get(url, params=params)
+        if response.status_code == 200:
+            data = response.json().get('data', [])
+            return pd.DataFrame(data)
+        return pd.DataFrame()
+    except Exception as e:
+        return pd.DataFrame()
+
 # --- CALENDAR MOCK & FETCH ---
 def get_mock_calendar_data():
     return [
