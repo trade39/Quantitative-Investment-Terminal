@@ -94,6 +94,7 @@ with st.sidebar:
     gemini_key = get_api_key("gemini_api_key")
     cg_key = get_api_key("coingecko_key") 
     fred_key = get_api_key("fred_api_key")
+    finnhub_key = get_api_key("finnhub_api_key")
     
     st.markdown("---")
     with st.expander("🌍 MARKET PULSE", expanded=True):
@@ -536,8 +537,9 @@ with macro_tab2:
     with st.spinner("Loading Intel..."):
         news_general = de.get_financial_news_general(news_key, query=asset_info.get('news_query', 'Finance'))
         news_ff = de.get_forex_factory_news(rapid_key, 'breaking')
+        news_finnhub = de.get_finnhub_news(finnhub_key, category='general')
         eco_events = de.get_economic_calendar(rapid_key, use_demo=use_demo_data)
-        news_sentiment_df = ai.calculate_news_sentiment(news_general[:5] + news_ff[:5])
+        news_sentiment_df = ai.calculate_news_sentiment(news_general[:5] + news_ff[:5] + news_finnhub[:5])
 
     col_eco, col_news = st.columns([1, 1])
     
@@ -573,8 +575,8 @@ with macro_tab2:
                  st.plotly_chart(fig_sent, use_container_width=True)
              except: st.warning("Sentiment chart error")
         
-        # RESTORED: Tabs for General vs Forex Factory
-        tab_gen, tab_ff = st.tabs(["📰 GENERAL", "⚡ FOREX FACTORY"])
+        # RESTORED: Tabs for General vs Forex Factory vs Finnhub
+        tab_gen, tab_ff, tab_fh = st.tabs(["📰 GENERAL", "⚡ FOREX FACTORY", "📈 FINNHUB"])
         
         def render_news(items):
             if items:
@@ -589,6 +591,7 @@ with macro_tab2:
         
         with tab_gen: render_news(news_general)
         with tab_ff: render_news(news_ff)
+        with tab_fh: render_news(news_finnhub)
 
 # ==============================================================================
 # 4. STRATEGIC ANALYSIS (TREND & POSITIONING)
@@ -863,6 +866,61 @@ with st.expander("🏛️ INSTITUTIONAL POSITIONING (COT) & FUNDAMENTALS", expan
                 st.markdown(f"**Algorithm:** `{cg_data['hashing']}`")
                 with st.expander("Asset Description"):
                     st.write(cg_data['desc'])
+
+# ==============================================================================
+# 4C. FINNHUB INSIDER ACTIVITY (US COMPANIES)
+# ==============================================================================
+if finnhub_key:
+    # Only try if we have an exact ticker (US stock) or attempt to use opt_ticker if it's SPY/QQQ
+    _symbol = asset_info.get('ticker')
+    if _symbol and not _symbol.startswith('^') and not '=' in _symbol and not '-' in _symbol:
+        pass # It's likely a normal stock symbol
+    elif asset_info.get('opt_ticker') and not '^' in asset_info.get('opt_ticker'):
+        _symbol = asset_info.get('opt_ticker')
+    else:
+        _symbol = None
+        
+    if _symbol:
+        with st.expander("🏢 FINNHUB INSIDER ACTIVITY & SENTIMENT (US COMPANIES)", expanded=False):
+            with st.spinner("Fetching Finnhub Insider Data..."):
+                to_date_str = datetime.now().strftime('%Y-%m-%d')
+                from_date_str = (datetime.now() - timedelta(days=365)).strftime('%Y-%m-%d')
+                
+                insider_sent = de.get_finnhub_insider_sentiment(_symbol, from_date_str, to_date_str, finnhub_key)
+                insider_trans = de.get_finnhub_insider_transactions(_symbol, finnhub_key)
+                
+            col_sent, col_trans = st.columns([1, 1])
+            
+            with col_sent:
+                st.markdown(f"**INSIDER SENTIMENT ({_symbol})**")
+                if not insider_sent.empty:
+                    try:
+                        insider_sent['date'] = pd.to_datetime(insider_sent['year'].astype(str) + '-' + insider_sent['month'].astype(str))
+                        fig_isent = go.Figure()
+                        colors = ['#00FFFF' if m > 0 else '#8080FF' for m in insider_sent['mspr']]
+                        fig_isent.add_trace(go.Bar(x=insider_sent['date'], y=insider_sent['mspr'], marker_color=colors))
+                        fig_isent = terminal_chart_layout(fig_isent, title="MONTHLY SHARE PURCHASE RATIO (MSPR)", height=250)
+                        st.plotly_chart(fig_isent, use_container_width=True)
+                        st.caption("MSPR ranges from -100 (Negative) to 100 (Positive). Signals price changes 30-90 days out.")
+                    except:
+                        st.warning("Could not render insider sentiment chart.")
+                else:
+                    st.info(f"No insider sentiment data available for {_symbol}.")
+            
+            with col_trans:
+                st.markdown(f"**LATEST TRANSACTIONS ({_symbol})**")
+                if not insider_trans.empty:
+                    # Clean up transaction data for display
+                    display_trans = []
+                    for _, row in insider_trans.head(10).iterrows():
+                        color = "#00FFFF" if row.get('change', 0) > 0 else "#8080FF"
+                        t_type = "BUY" if row.get('change', 0) > 0 else "SELL"
+                        display_trans.append({"Date": row.get('transactionDate', ''), "Name": row.get('name', ''), "Type": t_type, "Shares": row.get('change', 0), "Price": row.get('transactionPrice', 0)})
+                    
+                    df_disp = pd.DataFrame(display_trans)
+                    st.dataframe(df_disp, hide_index=True, use_container_width=True)
+                else:
+                    st.info(f"No recent transactions found for {_symbol}.")
 
 # ==============================================================================
 # 5. MARKET DYNAMICS (VOLATILITY & FLOW)
