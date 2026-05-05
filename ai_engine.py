@@ -119,8 +119,9 @@ def generate_deep_dive_thesis(ticker, price, change, regime, ml_signal, gex_data
         cot_str = cot_data['sentiment']
 
     prompt = f"""
-    You are a Senior Risk Manager at JD Capital writing a multi-page Execution Intelligence Brief for {ticker}.
-    MISSION: Quantify the probability of each outcome and define the optimal sizing strategy.
+    You are a Senior Risk Manager and Macro Strategist at JD Capital writing a multi-page Execution Intelligence Brief for {ticker}.
+    MISSION: Synthesize a top-down macro narrative, quantify the probability of outcomes, and define actionable execution strategy.
+    
     SYSTEM ARCHITECTURE: Adaptive Quantitative System.
     DATA: Price: {price:,.2f} ({change:.2f}%), Regime: {regime_val}, MarketStructure: {ms_trend},
     ML: {ml_signal} (Kelly Optimal: {macro_data.get('kelly_size', 'N/A')}), GEX: {gex_text}, COT: {cot_str}
@@ -131,25 +132,32 @@ def generate_deep_dive_thesis(ticker, price, change, regime, ml_signal, gex_data
     NEWS SUMMARY: {news_summary}
 
     OUTPUT FORMAT: Plain text. No markdown. No '$' symbols. 
-    LENGTH: Minimum 1,500 words. Be exhaustive.
+    LENGTH: Minimum 1,500 words. Be exhaustive, institutional, and predictive.
 
-    1. UNCERTAINTY MAPPING & STRUCTURE
-    Analyze the price action within the 1-week uncertainty bands. Is the market compressed or expanding? Define the 'Structural Walls' (exact boundaries) and the stability of the current regime.
+    1. TOP-DOWN NARRATIVE CONSTRUCTION & MACRO OVERVIEW
+    Synthesize cross-asset headlines and major global developments. Filter out the noise and identify what is actually moving capital. How do high-level forces (Yield Curve, CPI, Rates) shift the probability of Bullish vs Bearish outcomes?
 
-    2. THE MACRO CROSSROADS
-    Analyze the Macro Context (Yield Curve, CPI, Rates) and the 'Macro Pressure' score. How do these high-level forces shift the probability of the 'Bullish' vs 'Bearish' outcomes? Discuss the recession probability and its impact on this specific asset class.
+    2. DEEP DIVE ON PRIMARY CATALYST (SEARCH GROUNDING)
+    You MUST use your Google Search tool to isolate the single dominant macro driver of the day/week (e.g., a specific data release, geopolitical event, or central bank shift). Analyze its structural implications, transmission channels (how it impacts markets), and second-order effects. Prioritize this core narrative over treating all news equally.
 
-    3. REAL-TIME CATALYSTS & NEWS (SEARCH GROUNDING)
-    You MUST use your Google Search tool to identify catalysts (macro, geopolitical, central bank) from the last 7 days. Focus on how these live catalysts disrupt the 'Uncertainty Map'. Detail how specific news items (earnings, data releases, geopolitical shifts) are resolving or amplifying current volatility.
+    3. CROSS-ASSET BREAKDOWN
+    Systematically review the intermarket impact. How do bond yields, oil/commodities, forex flows, and risk sentiment in crypto influence the structural setup for {ticker}? Detail the liquidity and positioning flows (GEX, COT).
 
-    4. PROBABILISTIC RISK & TAIL DEFENSE
-    Quantify the 'Left Tail' risk using VaR and CVaR. How does the current 'Risk Density' impact position sizing? Explain the optimal Kelly allocation relative to the volatility-adjusted stop levels.
+    4. FORWARD-LOOKING MARKET IMPLICATIONS
+    Project expected reactions for the next trading session. Introduce implied probabilities for how the market will digest the primary catalyst. Transform the analysis from descriptive to predictive. 
 
-    5. LIQUIDITY & POSITIONING FLOWS
-    Analyze GEX and COT positioning. How do these flows shift the uncertainty map? Identify 'Gamma Walls' and 'Positioning Extremes' that could trigger a cascade.
+    5. PROBABILISTIC RISK & OUTLOOK FRAMEWORK (DECISION LAYER)
+    Apply a structured framework to project the next-day / next-week directional bias and scenario mapping. Quantify the 'Left Tail' risk using VaR and CVaR. How does the current 'Risk Density' and 'Uncertainty Map' impact position sizing and the Kelly allocation?
 
-    6. FINAL INSIGHT: THE ACTION PLAN
-    Define the EXACT triggers for entry. State the 'Acceptance Criteria' (Price + Volume + Close). Summarize the sizing, entry triggers, and exit targets in a final, no-nonsense executive summary.
+    6. PORTFOLIO-LEVEL DASHBOARD
+    Consolidate everything into an all-asset summary dashboard detailing: 
+    - Capital Flow Direction (where money is likely moving)
+    - Risk Catalysts (what could invalidate the view)
+    - Volatility Triggers (gamma walls, positioning extremes)
+    - Market Regime (risk-on, risk-off, transitional)
+
+    7. BIAS + RISK FRAMING (THE ACTION PLAN)
+    Explicitly state a clear Directional Bias and the Key Risks to that bias. Define uncertainty boundaries. Finally, outline EXACT triggers for entry (Acceptance Criteria: Price + Volume + Close) and optimal exit targets.
     """
 
     if use_grounding and HAS_GENAI:
