@@ -860,8 +860,9 @@ with st.expander("🏛️ INSTITUTIONAL POSITIONING (COT) & FUNDAMENTALS", expan
                 st.metric("Market Rank", f"#{cg_data['rank']}")
                 ath_color = "#8080FF" if cg_data['ath_change'] < -20 else "#00FFFF"
                 st.markdown(f"**ATH Drawdown:** <span style='color:{ath_color}'>{cg_data['ath_change']:.2f}%</span>", unsafe_allow_html=True)
-                st.progress(cg_data['sentiment'])
-                st.caption(f"Sentiment: {cg_data['sentiment']}% Bullish")
+                sentiment_val = int(cg_data.get('sentiment', 50) or 50)
+                st.progress(max(0, min(100, sentiment_val)))
+                st.caption(f"Sentiment: {cg_data.get('sentiment', 50)}% Bullish")
                 
                 # RESTORED: Algo & Description
                 st.markdown(f"**Algorithm:** `{cg_data['hashing']}`")
