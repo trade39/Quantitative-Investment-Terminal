@@ -93,28 +93,21 @@ def get_watchlist_data(tickers):
 @st.cache_data(ttl=300) 
 def get_coingecko_stats(cg_id, api_key):
     if not cg_id or not api_key: return None
-    if 'coingecko_calls' in st.session_state: st.session_state['coingecko_calls'] += 1
     
-    url = f"https://api.coingecko.com/api/v3/coins/{cg_id}"
-    params = {
-        "localization": "false", "tickers": "false", "market_data": "true",
-        "community_data": "true", "developer_data": "true", "sparkline": "false"
-    }
-    headers = {"x-cg-demo-api-key": api_key}
-    try:
-        response = requests.get(url, params=params, headers=headers)
-        if response.status_code == 200:
-            data = response.json()
-            return {
-                "rank": data.get('market_cap_rank', 'N/A'),
-                "sentiment": data.get('sentiment_votes_up_percentage', 50),
-                "hashing": data.get('hashing_algorithm', 'N/A'),
-                "ath": data['market_data']['ath']['usd'],
-                "ath_change": data['market_data']['ath_change_percentage']['usd'],
-                "desc": data.get('description', {}).get('en', '').split('.')[0] + "." 
-            }
-        return None
-    except Exception: return None
+    # Import locally to avoid circular dependencies if any
+    from data_loader import get_cg_coin_data
+    
+    data = get_cg_coin_data(cg_id, api_key=api_key)
+    if data:
+        return {
+            "rank": data.get('market_cap_rank', 'N/A'),
+            "sentiment": data.get('sentiment_votes_up_percentage', 50),
+            "hashing": data.get('hashing_algorithm', 'N/A'),
+            "ath": data.get('market_data', {}).get('ath', {}).get('usd', 'N/A'),
+            "ath_change": data.get('market_data', {}).get('ath_change_percentage', {}).get('usd', 'N/A'),
+            "desc": data.get('description', {}).get('en', '').split('.')[0] + "." 
+        }
+    return None
 
 # --- NEWS ENGINES ---
 @st.cache_data(ttl=14400) 
